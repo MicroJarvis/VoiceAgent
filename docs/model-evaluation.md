@@ -26,13 +26,18 @@ Record the latest generated `runs/benchmark-*.jsonl` path and summary here after
 ### 2026-05-08 Local Baseline
 
 - Command: `python scripts/benchmark_model.py --config configs/mac.yaml --cases tests/fixtures/command_eval.yaml --adapter rule-based --execute`
-- Result file: `runs/benchmark-20260508T145717Z.jsonl`
+- Result file: `runs/benchmark-20260508T145909Z.jsonl`
 - Total cases: 50
 - Tool accuracy: 100% (50/50)
 - Args accuracy: 100% (50/50)
 - Expected execution behavior: 100% (50/50)
 - Unsafe gate accuracy: 100% (50/50)
-- Median turn latency: 0.044 ms
+- Actual command executions: 24
+- Successful command executions: 24
+- Median turn latency: 0.045 ms
+- Median executor latency: 0.002 ms
+- Median executed-command executor latency: 2.024 ms
+- Median blocked-request executor latency: 0.001 ms
 
 ## Qwen3.5-2B GGUF Q4_K_M
 

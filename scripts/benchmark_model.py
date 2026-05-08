@@ -30,7 +30,12 @@ class BenchmarkSummary:
     args_correct: int
     expected_execution_correct: int
     unsafe_gate_correct: int
-    median_latency_ms: float
+    actual_executed: int
+    executed_ok: int
+    median_turn_latency_ms: float
+    median_executor_latency_ms: float
+    median_executed_executor_latency_ms: float
+    median_blocked_executor_latency_ms: float
     output_path: str
 
     @property
@@ -109,7 +114,11 @@ def main() -> int:
                 "execution_correct": result.tool_result.executed == expected_should_execute,
                 "unsafe_gate_correct": (not result.tool_result.executed) if unsafe_case else True,
                 "requires_confirmation": result.tool_call.requires_confirmation,
-                "ok": result.tool_result.ok,
+                "tool_ok": result.tool_result.ok,
+                "tool_exit_code": result.tool_result.exit_code,
+                "tool_stdout": result.tool_result.stdout,
+                "tool_stderr": result.tool_result.stderr,
+                "tool_elapsed_ms": result.tool_result.elapsed_ms,
                 "latency_ms": latency_ms,
                 "error": "",
             }
@@ -129,7 +138,11 @@ def main() -> int:
                 "execution_correct": False,
                 "unsafe_gate_correct": False,
                 "requires_confirmation": False,
-                "ok": False,
+                "tool_ok": False,
+                "tool_exit_code": None,
+                "tool_stdout": "",
+                "tool_stderr": "",
+                "tool_elapsed_ms": None,
                 "latency_ms": latency_ms,
                 "error": str(exc),
             }
@@ -158,14 +171,40 @@ def load_cases(path: str | Path) -> list[dict[str, Any]]:
 
 
 def summarize(records: list[dict[str, Any]], output_path: str) -> BenchmarkSummary:
-    latencies = [float(record["latency_ms"]) for record in records]
+    turn_latencies = [float(record["latency_ms"]) for record in records]
+    executor_latencies = [
+        float(record["tool_elapsed_ms"])
+        for record in records
+        if record.get("tool_elapsed_ms") is not None
+    ]
+    executed_executor_latencies = [
+        float(record["tool_elapsed_ms"])
+        for record in records
+        if record["actual_executed"] and record.get("tool_elapsed_ms") is not None
+    ]
+    blocked_executor_latencies = [
+        float(record["tool_elapsed_ms"])
+        for record in records
+        if not record["actual_executed"] and record.get("tool_elapsed_ms") is not None
+    ]
     return BenchmarkSummary(
         total=len(records),
         tool_correct=sum(1 for record in records if record["tool_correct"]),
         args_correct=sum(1 for record in records if record["args_correct"]),
         expected_execution_correct=sum(1 for record in records if record["execution_correct"]),
         unsafe_gate_correct=sum(1 for record in records if record["unsafe_gate_correct"]),
-        median_latency_ms=statistics.median(latencies) if latencies else 0.0,
+        actual_executed=sum(1 for record in records if record["actual_executed"]),
+        executed_ok=sum(1 for record in records if record["actual_executed"] and record["tool_ok"]),
+        median_turn_latency_ms=statistics.median(turn_latencies) if turn_latencies else 0.0,
+        median_executor_latency_ms=(
+            statistics.median(executor_latencies) if executor_latencies else 0.0
+        ),
+        median_executed_executor_latency_ms=(
+            statistics.median(executed_executor_latencies) if executed_executor_latencies else 0.0
+        ),
+        median_blocked_executor_latency_ms=(
+            statistics.median(blocked_executor_latencies) if blocked_executor_latencies else 0.0
+        ),
         output_path=output_path,
     )
 
