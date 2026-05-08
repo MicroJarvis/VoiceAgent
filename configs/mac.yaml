@@ -1,0 +1,13 @@
+llm:
+  provider: llamacpp
+  base_url: "http://127.0.0.1:8080"
+  model: "qwen3.5-2b-q4"
+  timeout_seconds: 30
+
+tools:
+  registry_path: "configs/tools.yaml"
+
+speech:
+  asr_provider: stub
+  tts_provider: stub
+  vad_enabled: false
