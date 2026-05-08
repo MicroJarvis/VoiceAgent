@@ -1,0 +1,89 @@
+tools:
+  read_time:
+    description: Read current system time.
+    risk: low
+    command: ["/bin/date"]
+    timeout_seconds: 5
+    args_schema: {}
+
+  echo_status:
+    description: Return a fixed health status.
+    risk: low
+    command: ["/bin/echo", "voice-agent-ok"]
+    timeout_seconds: 5
+    args_schema: {}
+
+  read_uptime:
+    description: Read system uptime.
+    risk: low
+    command: ["/usr/bin/uptime"]
+    timeout_seconds: 5
+    args_schema: {}
+
+  read_disk_usage:
+    description: Read disk usage summary.
+    risk: low
+    command: ["/bin/df", "-h", "."]
+    timeout_seconds: 5
+    args_schema: {}
+
+  read_memory:
+    description: Read memory pressure summary.
+    risk: low
+    command: ["/usr/bin/vm_stat"]
+    timeout_seconds: 5
+    args_schema: {}
+
+  list_home:
+    description: List the current project directory.
+    risk: low
+    command: ["/bin/ls", "-1"]
+    timeout_seconds: 5
+    args_schema: {}
+
+  service_status:
+    description: Show allowed local service status.
+    risk: low
+    command: ["/bin/echo", "status {name}"]
+    timeout_seconds: 5
+    args_schema:
+      name:
+        type: enum
+        values: ["camera", "music", "voice-agent"]
+
+  start_service:
+    description: Start an allowed local service.
+    risk: high
+    command: ["/bin/echo", "start {name}"]
+    timeout_seconds: 10
+    args_schema:
+      name:
+        type: enum
+        values: ["camera", "music", "voice-agent"]
+
+  stop_service:
+    description: Stop an allowed local service.
+    risk: high
+    command: ["/bin/echo", "stop {name}"]
+    timeout_seconds: 10
+    args_schema:
+      name:
+        type: enum
+        values: ["camera", "music", "voice-agent"]
+
+  restart_service:
+    description: Restart an allowed local service.
+    risk: high
+    command: ["/bin/echo", "restart {name}"]
+    timeout_seconds: 10
+    args_schema:
+      name:
+        type: enum
+        values: ["camera", "music", "voice-agent"]
+
+  explain_no_action:
+    description: Explain that no local command was executed because the request is unsafe or unclear.
+    risk: low
+    execution: noop
+    timeout_seconds: 1
+    args_schema: {}
