@@ -41,12 +41,13 @@ Record the latest generated `runs/benchmark-*.jsonl` path and summary here after
 
 ## Qwen3.5-2B GGUF Q4_K_M
 
-- Runtime:
-- Model source:
-- SHA256:
-- Quantization:
-- License:
-- Download date:
+- Runtime: llama.cpp/OpenAI-compatible server target
+- Model source: `https://huggingface.co/enacimie/Qwen3.5-2B-Q4_K_M-GGUF`
+- Local path: `models/qwen3.5-2b-q4_k_m.gguf`
+- SHA256: `b452184be7339c85516c6c468f4f3dcedd7491b40af19750f971ed8d0090800d`
+- Quantization: Q4_K_M GGUF
+- License: not recorded yet; verify the source repo card before redistribution
+- Download date: 2026-05-09
 - Context:
 - Temperature:
 - Platform:
