@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>口腔诊疗记录台</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>口腔诊疗记录台</h1>
+        <p>医患对话记录、整理与报告草稿</p>
+      </div>
+      <div class="header-actions">
+        <span id="statusText" class="status">就绪</span>
+        <button id="saveCaseBtn" type="button" class="secondary">保存会话</button>
+        <button id="loadCaseBtn" type="button" class="secondary">读取会话</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="panel setup-panel">
+        <div class="panel-title">
+          <h2>会话设置</h2>
+        </div>
+        <div class="field-grid">
+          <label>
+            <span>患者姓名</span>
+            <input id="patientName" autocomplete="off" placeholder="张三" />
+          </label>
+          <label>
+            <span>医生姓名</span>
+            <input id="doctorName" autocomplete="off" placeholder="李医生" />
+          </label>
+          <label>
+            <span>就诊日期</span>
+            <input id="visitDate" type="date" />
+          </label>
+          <label>
+            <span>主诉速记</span>
+            <input id="chiefNote" autocomplete="off" placeholder="右下后牙疼痛三天" />
+          </label>
+        </div>
+
+        <div class="settings-grid">
+          <label class="wide">
+            <span>本地 Whisper 命令</span>
+            <input id="whisperCommand" autocomplete="off" value="whisper" />
+          </label>
+          <label>
+            <span>转写模型</span>
+            <input id="transcriptionModel" autocomplete="off" value="large-v3-turbo" />
+          </label>
+          <label>
+            <span>整理 API Key</span>
+            <input id="apiKey" type="password" autocomplete="off" placeholder="报告整理模型 API Key" />
+          </label>
+          <label>
+            <span>整理 Base URL</span>
+            <input id="baseUrl" autocomplete="off" value="https://api.openai.com/v1" />
+          </label>
+          <label>
+            <span>整理模型</span>
+            <input id="reportModel" autocomplete="off" value="gpt-4o-mini" />
+          </label>
+          <label>
+            <span>接口测试</span>
+            <button id="testResponsesBtn" type="button" class="secondary">测试整理接口</button>
+          </label>
+        </div>
+
+        <div class="consent-row">
+          <label class="checkbox-label">
+            <input id="consent" type="checkbox" />
+            <span>已获得患者录音和 AI 辅助整理授权</span>
+          </label>
+          <label class="checkbox-label">
+            <input id="rememberSettings" type="checkbox" />
+            <span>在本机浏览器保存接口设置</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="main-grid">
+        <div class="left-stack">
+          <section class="panel recorder-panel">
+            <div class="panel-title">
+              <h2>录音</h2>
+              <span id="timer" class="timer">00:00</span>
+            </div>
+            <div class="controls">
+              <button id="startBtn" type="button">开始</button>
+              <button id="pauseBtn" type="button" class="secondary" disabled>暂停</button>
+              <button id="stopBtn" type="button" class="danger" disabled>结束</button>
+              <button id="transcribeBtn" type="button" disabled>转写录音</button>
+            </div>
+            <p id="recordingMeta" class="helper-text">录音完成后会显示文件大小和转写状态</p>
+            <pre id="apiTestResult" class="api-test-result" hidden></pre>
+            <audio id="audioPreview" controls hidden></audio>
+          </section>
+
+          <section class="panel transcript-panel">
+            <div class="panel-title">
+              <h2>对话记录</h2>
+              <div class="title-actions">
+                <button id="addSegmentBtn" type="button" class="secondary">新增一句</button>
+                <button id="segmentBtn" type="button" class="secondary">AI 标注角色</button>
+              </div>
+            </div>
+
+            <div class="manual-entry">
+              <select id="manualSpeaker" aria-label="说话人">
+                <option value="doctor">医生</option>
+                <option value="patient">患者</option>
+                <option value="unknown">待确认</option>
+              </select>
+              <textarea id="manualText" rows="2" placeholder="手动补充或粘贴一句对话"></textarea>
+            </div>
+
+            <div id="segments" class="segments"></div>
+          </section>
+        </div>
+
+        <section class="panel report-panel">
+          <div class="panel-title">
+            <h2>报告草稿</h2>
+            <div class="title-actions">
+              <button id="generateReportBtn" type="button">生成报告</button>
+              <button id="copyReportBtn" type="button" class="secondary">复制</button>
+              <button id="printBtn" type="button" class="secondary">打印</button>
+            </div>
+          </div>
+          <textarea id="reportEditor" class="report-editor" placeholder="报告会在录音结束后自动生成，也可以手动点击“生成报告”。"></textarea>
+        </section>
+      </section>
+    </main>
+
+    <template id="segmentTemplate">
+      <article class="segment">
+        <select class="segment-speaker" aria-label="说话人">
+          <option value="doctor">医生</option>
+          <option value="patient">患者</option>
+          <option value="unknown">待确认</option>
+        </select>
+        <textarea class="segment-text" rows="2"></textarea>
+        <button class="icon-button segment-delete" type="button" title="删除">删除</button>
+      </article>
+    </template>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
