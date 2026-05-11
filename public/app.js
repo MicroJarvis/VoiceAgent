@@ -29,6 +29,12 @@ const state = {
   auditLog: [],
   report: null,
   reportText: "",
+  documentMode: "report",
+  patientSummaryText: "",
+  referralLetterText: "",
+  workflowStage: "needs-consent",
+  recordingState: "idle",
+  micLevel: 0,
   lastTranscribedAt: "",
   lastGeneratedAt: ""
 };
@@ -39,6 +45,13 @@ const els = {
   statusText: document.querySelector("#statusText"),
   saveCaseBtn: document.querySelector("#saveCaseBtn"),
   loadCaseBtn: document.querySelector("#loadCaseBtn"),
+  encounterSummaryText: document.querySelector("#encounterSummaryText"),
+  workflowStageBadge: document.querySelector("#workflowStageBadge"),
+  workflowStepPatient: document.querySelector("#workflowStepPatient"),
+  workflowStepRecord: document.querySelector("#workflowStepRecord"),
+  workflowStepReview: document.querySelector("#workflowStepReview"),
+  workflowConnectorRecord: document.querySelector("#workflowConnectorRecord"),
+  workflowConnectorReview: document.querySelector("#workflowConnectorReview"),
   patientName: document.querySelector("#patientName"),
   patientId: document.querySelector("#patientId"),
   doctorName: document.querySelector("#doctorName"),
@@ -66,6 +79,11 @@ const els = {
   streamingEnabled: document.querySelector("#streamingEnabled"),
   rememberSettings: document.querySelector("#rememberSettings"),
   timer: document.querySelector("#timer"),
+  recordingStateBadge: document.querySelector("#recordingStateBadge"),
+  micState: document.querySelector("#micState"),
+  sherpaState: document.querySelector("#sherpaState"),
+  modelState: document.querySelector("#modelState"),
+  micLevelBar: document.querySelector("#micLevelBar"),
   startBtn: document.querySelector("#startBtn"),
   pauseBtn: document.querySelector("#pauseBtn"),
   stopBtn: document.querySelector("#stopBtn"),
@@ -86,6 +104,11 @@ const els = {
   referralLetterBtn: document.querySelector("#referralLetterBtn"),
   copyReportBtn: document.querySelector("#copyReportBtn"),
   printBtn: document.querySelector("#printBtn"),
+  reportStageBadge: document.querySelector("#reportStageBadge"),
+  reportDocTab: document.querySelector("#reportDocTab"),
+  patientDocTab: document.querySelector("#patientDocTab"),
+  referralDocTab: document.querySelector("#referralDocTab"),
+  outputGateHint: document.querySelector("#outputGateHint"),
   transcriptReviewed: document.querySelector("#transcriptReviewed"),
   historyReviewed: document.querySelector("#historyReviewed"),
   planReviewed: document.querySelector("#planReviewed"),
@@ -95,7 +118,9 @@ const els = {
   evidencePanel: document.querySelector("#evidencePanel"),
   auditPanel: document.querySelector("#auditPanel"),
   setupPanel: document.querySelector(".setup-panel"),
-  collapseToggle: document.querySelector(".collapse-toggle")
+  collapseToggle: document.querySelector(".collapse-toggle"),
+  toothButtons: document.querySelectorAll("[data-tooth-token]"),
+  templateButtons: document.querySelectorAll("[data-field-template]")
 };
 
 const clinicalInputs = [
@@ -133,6 +158,8 @@ function init() {
   renderClinicalAlerts();
   renderEvidence();
   renderAuditLog();
+  renderWorkflowState();
+  renderDocumentMode();
   updateActionStates();
 }
 
@@ -148,6 +175,9 @@ function bindEvents() {
   els.generateReportBtn.addEventListener("click", generateReport);
   els.patientSummaryBtn.addEventListener("click", () => buildDocumentDraft("patient"));
   els.referralLetterBtn.addEventListener("click", () => buildDocumentDraft("referral"));
+  [els.reportDocTab, els.patientDocTab, els.referralDocTab].forEach((tab) => {
+    tab.addEventListener("click", () => setDocumentMode(tab.dataset.documentMode));
+  });
   els.testResponsesBtn.addEventListener("click", testResponsesEndpoint);
   els.testSherpaBtn.addEventListener("click", testSherpaConnection);
   els.copyReportBtn.addEventListener("click", copyReport);
@@ -155,34 +185,52 @@ function bindEvents() {
   els.saveCaseBtn.addEventListener("click", saveCase);
   els.loadCaseBtn.addEventListener("click", loadCase);
   els.reportEditor.addEventListener("input", () => {
-    state.reportText = els.reportEditor.value;
+    syncCurrentDocumentText();
     els.finalReviewed.checked = false;
     updateActionStates();
+    renderWorkflowState();
   });
   els.rememberSettings.addEventListener("change", saveSettings);
   [els.whisperCommand, els.sherpaWsUrl, els.baseUrl, els.transcriptionModel, els.reportModel].forEach((input) => {
-    input.addEventListener("change", saveSettings);
+    input.addEventListener("change", () => {
+      saveSettings();
+      renderWorkflowState();
+      updateActionStates();
+    });
   });
   els.apiKey.addEventListener("change", () => {
     if (els.rememberSettings.checked) {
       setStatus("API Key 不会保存到本机浏览器", "busy");
     }
+    renderWorkflowState();
+    updateActionStates();
   });
   [els.consent, els.privacyConfirmed, els.streamingEnabled].forEach((input) => {
-    input.addEventListener("change", updateActionStates);
+    input.addEventListener("change", () => {
+      updateActionStates();
+      renderWorkflowState();
+    });
   });
   els.streamingEnabled.addEventListener("change", saveSettings);
   clinicalInputs.forEach((key) => {
     els[key].addEventListener("input", () => {
       invalidateReview(["historyReviewed", "planReviewed", "finalReviewed"]);
       renderClinicalAlerts();
+      renderWorkflowState();
     });
   });
   reviewInputs.forEach((key) => {
     els[key].addEventListener("change", () => {
       addAuditEvent(`审核更新：${reviewLabel(key)}=${els[key].checked ? "是" : "否"}`);
       updateActionStates();
+      renderWorkflowState();
     });
+  });
+  els.toothButtons.forEach((button) => {
+    button.addEventListener("click", () => insertToothToken(button.dataset.toothToken));
+  });
+  els.templateButtons.forEach((button) => {
+    button.addEventListener("click", () => applyFieldTemplate(button.dataset.fieldTemplate, button.dataset.templateText));
   });
 }
 
@@ -195,11 +243,13 @@ function toggleSetupPanel() {
 async function startRecording() {
   if (!els.consent.checked) {
     setStatus("请先确认录音授权", "error");
+    renderWorkflowState();
     return;
   }
 
   if (!els.privacyConfirmed.checked) {
     setStatus("请先确认隐私要求", "error");
+    renderWorkflowState();
     return;
   }
 
@@ -215,6 +265,8 @@ async function startRecording() {
     state.audioBlob = null;
     state.audioMimeType = mimeType || "audio/webm";
     state.mediaStream = stream;
+    state.recordingState = "recording";
+    updateMicLevel(0);
     resetSherpaState();
     state.mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
 
@@ -249,6 +301,7 @@ async function startRecording() {
     invalidateReview();
     addAuditEvent("开始录音");
     setStatus(els.streamingEnabled.checked ? "录音中，实时转写" : "录音中", "busy");
+    renderWorkflowState();
     setRecorderNote(
       els.streamingEnabled.checked
         ? "正在连接 sherpa-onnx 实时转写；结束后会用实时稿校对并生成报告草稿。"
@@ -256,7 +309,9 @@ async function startRecording() {
       "busy"
     );
   } catch (error) {
+    state.recordingState = "error";
     setStatus(error.message || "无法开始录音", "error");
+    renderWorkflowState();
   }
 }
 
@@ -268,8 +323,11 @@ function togglePause() {
     state.elapsedBeforePause += Date.now() - state.recordingStartedAt;
     clearInterval(state.timerId);
     stopSherpaStreaming({ finish: true, commitTranscript: true });
+    state.recordingState = "paused";
+    updateMicLevel(0);
     els.pauseBtn.textContent = "继续";
     setStatus("已暂停");
+    renderWorkflowState();
     return;
   }
 
@@ -280,8 +338,10 @@ function togglePause() {
     if (els.streamingEnabled.checked) {
       startSherpaStreaming(state.mediaStream);
     }
+    state.recordingState = "recording";
     els.pauseBtn.textContent = "暂停";
     setStatus(els.streamingEnabled.checked ? "录音中，实时转写" : "录音中", "busy");
+    renderWorkflowState();
   }
 }
 
@@ -293,6 +353,8 @@ function stopRecording() {
   stopSherpaStreaming({ finish: true });
   state.mediaRecorder.stop();
   clearInterval(state.timerId);
+  state.recordingState = "processing";
+  updateMicLevel(0);
   els.startBtn.disabled = false;
   els.pauseBtn.disabled = true;
   els.stopBtn.disabled = true;
@@ -301,6 +363,7 @@ function stopRecording() {
   setStatus("录音完成");
   addAuditEvent("结束录音");
   updateActionStates();
+  renderWorkflowState();
 }
 
 function resetSherpaState() {
@@ -354,9 +417,11 @@ async function startSherpaStreaming(stream) {
     state.sherpaStartedAt = Date.now();
     addAuditEvent(`连接 sherpa 实时转写：${wsUrl}`);
     setRecorderNote(`正在连接 sherpa-onnx：${wsUrl}`, "busy");
+    renderWorkflowState();
   } catch (error) {
     setRecorderNote(`sherpa 实时转写连接失败，已回退到结束后本地转写：${error.message}`, "error");
     stopSherpaStreaming();
+    renderWorkflowState();
   }
 }
 
@@ -395,6 +460,8 @@ function stopSherpaStreaming(options = {}) {
   state.audioSink = null;
   state.sherpaSocket = null;
   state.sherpaConnected = false;
+  updateMicLevel(0);
+  renderWorkflowState();
 }
 
 async function transcribeRecording(options = {}) {
@@ -509,6 +576,7 @@ function createSherpaSocket(wsUrl) {
     state.sherpaConnected = true;
     setStatus("录音中，实时转写已连接", "busy");
     setRecorderNote(`sherpa-onnx 已连接，正在发送 16kHz 音频流。若下方仍无文字，请确认模型服务正在返回识别结果。`, "busy");
+    renderWorkflowState();
   });
 
   socket.addEventListener("message", (event) => {
@@ -521,6 +589,7 @@ function createSherpaSocket(wsUrl) {
     if (state.sherpaStartedAt) {
       setRecorderNote(`sherpa 实时转写连接异常：请确认 ${els.sherpaWsUrl.value.trim()} 正在监听。录音仍会保存，结束后将使用本地 Whisper。`, "error");
     }
+    renderWorkflowState();
   });
 
   socket.addEventListener("close", () => {
@@ -533,6 +602,7 @@ function createSherpaSocket(wsUrl) {
     if (state.mediaRecorder?.state === "recording") {
       setRecorderNote(`sherpa 实时转写已断开。已发送 ${state.sherpaChunksSent} 个音频块，收到 ${state.sherpaMessagesReceived} 条消息。`, "error");
     }
+    renderWorkflowState();
   });
 
   return socket;
@@ -546,6 +616,7 @@ function createAudioWorkletNode(audioContext) {
     const socket = state.sherpaSocket;
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
     const input = event.inputBuffer.getChannelData(0);
+    updateMicLevel(rmsLevel(input));
     const resampled = downsampleFloat32(input, audioContext.sampleRate, sherpaTargetSampleRate);
     if (!resampled.length) return;
 
@@ -586,6 +657,22 @@ function downsampleFloat32(input, inputRate, outputRate) {
     output[i] = count ? sum / count : input[start] || 0;
   }
   return output;
+}
+
+function rmsLevel(input) {
+  if (!input?.length) return 0;
+  let sum = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    sum += input[i] * input[i];
+  }
+  return Math.min(1, Math.sqrt(sum / input.length) * 7);
+}
+
+function updateMicLevel(level) {
+  state.micLevel = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : 0;
+  if (els.micLevelBar) {
+    els.micLevelBar.style.width = `${Math.round(state.micLevel * 100)}%`;
+  }
 }
 
 function handleSherpaMessage(data) {
@@ -821,6 +908,7 @@ async function autoProofreadTranscript() {
 }
 
 async function generateReport(options = {}) {
+  state.documentMode = "report";
   if (!state.segments.some((segment) => segment.text.trim())) {
     setStatus("没有对话内容", "error");
     return;
@@ -963,9 +1051,11 @@ function renderSegments() {
     const speaker = node.querySelector(".segment-speaker");
     const text = node.querySelector(".segment-text");
     const deleteBtn = node.querySelector(".segment-delete");
+    const insights = node.querySelector(".segment-insights");
 
     speaker.value = segment.speaker || "unknown";
     text.value = segment.text || "";
+    renderSegmentInsights(node, insights, segment);
 
     speaker.addEventListener("change", () => {
       state.segments[index].speaker = speaker.value;
@@ -996,9 +1086,112 @@ function renderSegments() {
   });
 }
 
+function renderSegmentInsights(node, container, segment) {
+  if (!container) return;
+  const insights = segmentInsights(segment.text || "");
+  node.classList.toggle("has-warning", insights.some((item) => item.type === "warning"));
+  node.classList.toggle("has-tooth", insights.some((item) => item.type === "tooth"));
+  container.innerHTML = insights
+    .map((item) => `<span class="insight-chip ${item.type === "warning" ? "warning" : ""}">${escapeHtml(item.label)}</span>`)
+    .join("");
+}
+
+function segmentInsights(text) {
+  return [
+    ...extractToothMentions(text).map((label) => ({ type: "tooth", label: `牙位：${label}` })),
+    ...extractRiskMentions(text).map((label) => ({ type: "warning", label }))
+  ].slice(0, 8);
+}
+
+function extractToothMentions(text) {
+  const value = String(text || "");
+  const mentions = [];
+  const toothMatches = value.match(/\b(?:[1-4][1-8])\b/g) || [];
+  mentions.push(...toothMatches);
+  const quadrantMatches = value.match(/(?:左|右)(?:上|下)(?:前牙|后牙|磨牙|牙|智齿)/g) || [];
+  mentions.push(...quadrantMatches);
+  return unique(mentions).slice(0, 5);
+}
+
+function extractRiskMentions(text) {
+  const value = String(text || "");
+  const patterns = [
+    [/过敏|青霉素|头孢|麻药|利多卡因/, "过敏/麻药风险"],
+    [/抗凝|阿司匹林|华法林|氯吡格雷|利伐沙班/, "抗凝用药"],
+    [/糖尿病|血糖/, "糖尿病"],
+    [/高血压|血压/, "高血压"],
+    [/妊娠|怀孕|哺乳/, "妊娠/哺乳"],
+    [/拔牙|种植|翻瓣|植骨|骨粉|根管|开髓|麻醉|处方|抗生素|止痛药/, "高风险治疗"]
+  ];
+  return patterns.filter(([pattern]) => pattern.test(value)).map(([, label]) => label);
+}
+
+function insertToothToken(token) {
+  const target = els.examFindings.value.trim() ? els.examFindings : els.chiefNote;
+  const prefix = target.value.trim();
+  target.value = [prefix, token].filter(Boolean).join(prefix ? "；" : "");
+  target.focus();
+  invalidateReview(["historyReviewed", "planReviewed", "finalReviewed"]);
+  renderClinicalAlerts();
+  renderWorkflowState();
+  addAuditEvent(`插入牙位快捷：${token}`);
+}
+
+function applyFieldTemplate(field, text) {
+  const input = els[field];
+  if (!input || !text) return;
+  const existing = input.value.trim();
+  input.value = [existing, text].filter(Boolean).join(existing ? "\n" : "");
+  input.focus();
+  invalidateReview(["historyReviewed", "planReviewed", "finalReviewed"]);
+  renderClinicalAlerts();
+  renderWorkflowState();
+  addAuditEvent(`插入临床速记：${field}`);
+}
+
 function renderReport(report) {
   state.reportText = formatReportText(report);
-  els.reportEditor.value = state.reportText;
+  state.documentMode = "report";
+  renderDocumentMode();
+}
+
+function setDocumentMode(mode) {
+  syncCurrentDocumentText();
+  state.documentMode = ["report", "patient", "referral"].includes(mode) ? mode : "report";
+  renderDocumentMode();
+  updateActionStates();
+  renderWorkflowState();
+}
+
+function syncCurrentDocumentText() {
+  const text = els.reportEditor.value;
+  if (state.documentMode === "patient") {
+    state.patientSummaryText = text;
+  } else if (state.documentMode === "referral") {
+    state.referralLetterText = text;
+  } else {
+    state.reportText = text;
+  }
+}
+
+function renderDocumentMode() {
+  const mode = state.documentMode || "report";
+  const tabs = [els.reportDocTab, els.patientDocTab, els.referralDocTab];
+  tabs.forEach((tab) => {
+    const active = tab.dataset.documentMode === mode;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", String(active));
+  });
+  if (mode === "patient") {
+    els.reportEditor.value = state.patientSummaryText || "";
+    els.reportEditor.placeholder = "患者说明尚未生成。完成最终审核后点击“患者说明”。";
+  } else if (mode === "referral") {
+    els.reportEditor.value = state.referralLetterText || "";
+    els.reportEditor.placeholder = "转诊信尚未生成。完成最终审核后点击“转诊信”。";
+  } else {
+    els.reportEditor.value = state.reportText || "";
+    els.reportEditor.placeholder = "录音结束后会自动生成报告草稿；也可以在医生核对后手动点击「生成报告」。\n\n报告内容仅供参考，最终诊断和治疗方案需由医生确认。";
+  }
 }
 
 function extractPerioChart() {
@@ -1021,17 +1214,23 @@ function extractPerioChart() {
 }
 
 function buildDocumentDraft(type) {
-  const gate = finalOutputGateMessage();
+  const gate = finalReportGateMessage();
   if (gate) {
     setStatus(gate, "error");
+    renderWorkflowState();
     return;
   }
   const text = type === "referral" ? formatReferralLetter() : formatPatientSummary();
-  els.reportEditor.value = text;
-  state.reportText = text;
-  els.finalReviewed.checked = false;
+  if (type === "referral") {
+    state.referralLetterText = text;
+    setDocumentMode("referral");
+  } else {
+    state.patientSummaryText = text;
+    setDocumentMode("patient");
+  }
   addAuditEvent(type === "referral" ? "生成转诊信草稿" : "生成患者说明草稿");
   updateActionStates();
+  renderWorkflowState();
   setStatus(type === "referral" ? "转诊信草稿已生成" : "患者说明草稿已生成");
 }
 
@@ -1046,6 +1245,7 @@ function reportHeader() {
 }
 
 async function copyReport() {
+  syncCurrentDocumentText();
   const text = els.reportEditor.value.trim();
   if (!text) {
     setStatus("没有可复制的报告", "error");
@@ -1062,6 +1262,7 @@ async function copyReport() {
 }
 
 function printReport() {
+  syncCurrentDocumentText();
   const gate = finalOutputGateMessage();
   if (gate) {
     setStatus(gate, "error");
@@ -1077,6 +1278,7 @@ function setReportPlaceholder(text) {
 }
 
 function saveCase() {
+  syncCurrentDocumentText();
   localStorage.setItem("dentalVoiceAgent.case", JSON.stringify({
     encounter: readEncounter(),
     review: readReviewState(),
@@ -1085,7 +1287,11 @@ function saveCase() {
     evidence: state.evidence,
     auditLog: state.auditLog,
     report: state.report,
-    reportText: els.reportEditor.value,
+    reportText: state.reportText,
+    canonicalReportText: state.reportText,
+    documentMode: state.documentMode,
+    patientSummaryText: state.patientSummaryText,
+    referralLetterText: state.referralLetterText,
     lastTranscribedAt: state.lastTranscribedAt,
     lastGeneratedAt: state.lastGeneratedAt,
     savedAt: new Date().toISOString()
@@ -1109,7 +1315,10 @@ function loadCase() {
     state.evidence = Array.isArray(saved.evidence) ? saved.evidence : [];
     state.auditLog = Array.isArray(saved.auditLog) ? saved.auditLog : [];
     state.report = saved.report || null;
-    state.reportText = saved.reportText || "";
+    state.reportText = saved.canonicalReportText || saved.reportText || "";
+    state.documentMode = saved.documentMode || "report";
+    state.patientSummaryText = saved.patientSummaryText || "";
+    state.referralLetterText = saved.referralLetterText || "";
     state.lastTranscribedAt = saved.lastTranscribedAt || "";
     state.lastGeneratedAt = saved.lastGeneratedAt || "";
     renderSegments();
@@ -1117,14 +1326,15 @@ function loadCase() {
     renderEvidence();
     renderAuditLog();
     if (state.report) {
-      renderReport(state.report);
-      if (state.reportText) {
-        els.reportEditor.value = state.reportText;
+      if (!state.reportText) {
+        state.reportText = formatReportText(state.report);
       }
+      renderDocumentMode();
     } else if (state.reportText) {
-      els.reportEditor.value = state.reportText;
+      renderDocumentMode();
     }
     updateActionStates();
+    renderWorkflowState();
     setStatus("会话已读取");
   } catch {
     setStatus("会话数据不可用", "error");
@@ -1368,22 +1578,183 @@ function reportGateMessage() {
   return "";
 }
 
-function finalOutputGateMessage() {
-  if (!els.reportEditor.value.trim()) return "没有可输出的报告";
+function currentDocumentText() {
+  if (state.documentMode === "patient") return state.patientSummaryText;
+  if (state.documentMode === "referral") return state.referralLetterText;
+  return state.reportText;
+}
+
+function finalReportGateMessage() {
+  if (!state.reportText.trim()) return "没有可输出的报告";
   if (reportGateMessage()) return reportGateMessage();
   if (!els.finalReviewed.checked) return "请先完成最终报告医生审核";
   return "";
 }
 
+function finalOutputGateMessage() {
+  if (finalReportGateMessage()) return finalReportGateMessage();
+  if (!currentDocumentText().trim()) return "当前文档尚未生成";
+  return "";
+}
+
 function updateActionStates() {
+  syncCurrentDocumentText();
   const hasSegments = state.segments.some((segment) => String(segment.text || "").trim());
   const canGenerate = hasSegments && !reportGateMessage();
-  const canOutput = !finalOutputGateMessage();
+  const canDerive = !finalReportGateMessage();
+  const canOutput = canDerive && Boolean(currentDocumentText().trim());
   els.generateReportBtn.disabled = !canGenerate;
-  els.patientSummaryBtn.disabled = !canOutput;
-  els.referralLetterBtn.disabled = !canOutput;
+  els.patientSummaryBtn.disabled = !canDerive;
+  els.referralLetterBtn.disabled = !canDerive;
   els.copyReportBtn.disabled = !canOutput;
   els.printBtn.disabled = !canOutput;
+  renderWorkflowState();
+}
+
+function renderWorkflowState() {
+  const stage = computeWorkflowStage();
+  state.workflowStage = stage.key;
+  renderEncounterSummary();
+  renderWorkflowSteps(stage);
+  renderRecordingState(stage);
+  renderReportStage(stage);
+  renderOutputGateHint();
+}
+
+function computeWorkflowStage() {
+  if (!els.consent.checked || !els.privacyConfirmed.checked) {
+    return { key: "needs-consent", label: "待确认授权", tone: "pending", activeStep: "patient" };
+  }
+  if (state.mediaRecorder?.state === "recording" || state.recordingState === "recording") {
+    return { key: "recording", label: "录音中", tone: "active", activeStep: "record" };
+  }
+  if (state.mediaRecorder?.state === "paused" || state.recordingState === "paused") {
+    return { key: "paused", label: "已暂停", tone: "active", activeStep: "record" };
+  }
+  if (state.finalizingRecording || state.recordingState === "processing") {
+    return { key: "processing", label: "整理中", tone: "active", activeStep: "record" };
+  }
+  const hasSegments = state.segments.some((segment) => String(segment.text || "").trim());
+  if (!hasSegments) {
+    return { key: "ready-record", label: "可开始录音", tone: "ready", activeStep: "record" };
+  }
+  if (!els.transcriptReviewed.checked) {
+    return { key: "review-transcript", label: "待核对转写", tone: "active", activeStep: "review" };
+  }
+  if (!els.historyReviewed.checked || !els.planReviewed.checked) {
+    return { key: "review-clinical", label: "待临床审核", tone: "active", activeStep: "review" };
+  }
+  if (!state.reportText.trim()) {
+    return { key: "ready-report", label: "可生成报告", tone: "ready", activeStep: "review" };
+  }
+  if (!els.finalReviewed.checked) {
+    return { key: "final-review", label: "待最终审核", tone: "active", activeStep: "review" };
+  }
+  return { key: "done", label: "可输出", tone: "done", activeStep: "review" };
+}
+
+function renderEncounterSummary() {
+  const patient = els.patientName.value.trim() || "未命名患者";
+  const patientId = els.patientId.value.trim();
+  const chief = els.chiefNote.value.trim();
+  const date = els.visitDate.value;
+  const pieces = [
+    patient,
+    patientId && `编号 ${patientId}`,
+    date,
+    chief && `主诉：${chief}`
+  ].filter(Boolean);
+  els.encounterSummaryText.textContent = pieces.length ? pieces.join(" · ") : "未填写患者信息";
+}
+
+function renderWorkflowSteps(stage) {
+  const order = ["patient", "record", "review"];
+  const activeIndex = order.indexOf(stage.activeStep);
+  [
+    [els.workflowStepPatient, "patient"],
+    [els.workflowStepRecord, "record"],
+    [els.workflowStepReview, "review"]
+  ].forEach(([node, key]) => {
+    const index = order.indexOf(key);
+    node.classList.toggle("active", key === stage.activeStep);
+    node.classList.toggle("completed", index < activeIndex || stage.key === "done");
+  });
+  els.workflowConnectorRecord.classList.toggle("completed", activeIndex > 0 || stage.key === "done");
+  els.workflowConnectorReview.classList.toggle("completed", activeIndex > 1 || stage.key === "done");
+  els.workflowStageBadge.textContent = stage.label;
+  els.workflowStageBadge.className = `stage-badge ${stage.tone}`;
+}
+
+function renderRecordingState(stage) {
+  const stateMeta = recordingStateMeta(stage);
+  els.recordingStateBadge.textContent = stateMeta.label;
+  els.recordingStateBadge.className = `state-badge ${stateMeta.tone}`;
+  els.micState.textContent = state.mediaStream
+    ? `麦克风已连接 · 信号 ${Math.round(state.micLevel * 100)}%`
+    : els.consent.checked && els.privacyConfirmed.checked
+      ? "麦克风待开始"
+      : "麦克风待授权";
+  if (!els.streamingEnabled.checked) {
+    els.sherpaState.textContent = "实时转写已关闭";
+  } else if (state.sherpaConnected) {
+    els.sherpaState.textContent = `实时转写已连接 · ${state.sherpaMessagesReceived} 条`;
+  } else if (state.mediaRecorder?.state === "recording") {
+    els.sherpaState.textContent = "实时转写连接中/已断开";
+  } else {
+    els.sherpaState.textContent = "实时转写待连接";
+  }
+  els.modelState.textContent = els.apiKey.value.trim()
+    ? `整理接口已配置 · ${els.reportModel.value.trim() || "未填模型"}`
+    : "整理接口未配置";
+}
+
+function recordingStateMeta(stage) {
+  if (stage.key === "recording") return { label: "正在录音", tone: "recording" };
+  if (stage.key === "paused") return { label: "已暂停", tone: "processing" };
+  if (stage.key === "processing") return { label: "正在整理", tone: "processing" };
+  if (stage.key === "done") return { label: "已完成", tone: "done" };
+  if (stage.key.startsWith("review") || stage.key === "final-review" || stage.key === "ready-report") {
+    return { label: "待审核", tone: "ready" };
+  }
+  if (stage.key === "needs-consent") return { label: "待授权", tone: "idle" };
+  return { label: "待录音", tone: "idle" };
+}
+
+function renderReportStage(stage) {
+  if (!state.reportText.trim()) {
+    els.reportStageBadge.textContent = "未生成";
+    els.reportStageBadge.className = "stage-badge muted";
+    return;
+  }
+  if (!els.finalReviewed.checked) {
+    els.reportStageBadge.textContent = stage.key === "processing" ? "自动草稿中" : "AI 草稿待审";
+    els.reportStageBadge.className = "stage-badge active";
+    return;
+  }
+  els.reportStageBadge.textContent = "医生已审核";
+  els.reportStageBadge.className = "stage-badge done";
+}
+
+function renderOutputGateHint() {
+  if (!state.reportText.trim()) {
+    els.outputGateHint.textContent = "报告生成后会在这里显示输出条件。";
+    els.outputGateHint.className = "gate-hint";
+    return;
+  }
+  const reportGate = finalReportGateMessage();
+  if (reportGate) {
+    els.outputGateHint.textContent = `暂不能派生或输出：${reportGate}`;
+    els.outputGateHint.className = "gate-hint blocked";
+    return;
+  }
+  const gate = finalOutputGateMessage();
+  if (gate) {
+    els.outputGateHint.textContent = `当前标签暂不能输出：${gate}`;
+    els.outputGateHint.className = "gate-hint blocked";
+    return;
+  }
+  els.outputGateHint.textContent = "最终报告已通过医生审核，可以复制、打印或派生患者说明/转诊信。";
+  els.outputGateHint.className = "gate-hint ready";
 }
 
 function renderClinicalAlerts() {

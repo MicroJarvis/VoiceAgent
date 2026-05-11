@@ -114,6 +114,13 @@ try {
   assert(html.includes("id=\"sherpaWsUrl\""), "page should include sherpa websocket setting");
   assert(html.includes("id=\"streamingEnabled\""), "page should include streaming toggle");
   assert(html.includes("id=\"testSherpaBtn\""), "page should include sherpa websocket test button");
+  assert(html.includes("id=\"workflowStageBadge\""), "page should include workflow stage badge");
+  assert(html.includes("id=\"recordingStateBadge\""), "page should include recording state badge");
+  assert(html.includes("id=\"micLevelBar\""), "page should include microphone level meter");
+  assert(html.includes("id=\"outputGateHint\""), "page should include output gate hint");
+  assert(html.includes("data-document-mode=\"patient\""), "page should include patient summary document tab");
+  assert(html.includes("data-tooth-token=\"右下后牙\""), "page should include tooth shortcut chips");
+  assert(html.includes("data-field-template=\"allergies\""), "page should include clinical risk templates");
 
   const appJs = await fetchText(`http://127.0.0.1:${appPort}/app.js`);
   assert(appJs.includes("apiKey: \"\""), "frontend should not persist API keys in settings");
@@ -123,6 +130,10 @@ try {
   assert(appJs.includes("applySherpaDraftForFinalization"), "frontend should use sherpa draft for automatic finalization");
   assert(appJs.includes("extractSherpaText"), "frontend should extract text from varied sherpa payloads");
   assert(appJs.includes("sherpaMessagesReceived"), "frontend should expose sherpa message diagnostics");
+  assert(appJs.includes("computeWorkflowStage"), "frontend should drive workflow steps from state");
+  assert(appJs.includes("renderOutputGateHint"), "frontend should explain blocked output actions");
+  assert(appJs.includes("extractToothMentions"), "frontend should highlight dental locations in transcript");
+  assert(appJs.includes("extractRiskMentions"), "frontend should highlight clinical risk terms in transcript");
 
   const settings = {
     apiKey: "test-key",

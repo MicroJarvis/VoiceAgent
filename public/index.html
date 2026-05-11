@@ -92,18 +92,26 @@
 
       <main class="workspace">
         <section class="center-panel">
+          <div class="encounter-summary" aria-label="本次接诊摘要">
+            <div>
+              <span class="summary-label">当前接诊</span>
+              <strong id="encounterSummaryText">未填写患者信息</strong>
+            </div>
+            <span id="workflowStageBadge" class="stage-badge pending">待确认授权</span>
+          </div>
+
           <div class="workflow-steps" aria-label="诊疗记录流程">
-            <div class="step completed">
+            <div id="workflowStepPatient" class="step active" data-step="patient">
               <span class="step-number">1</span>
               <span>确认患者</span>
             </div>
-            <span class="step-connector completed" aria-hidden="true"></span>
-            <div class="step active">
+            <span id="workflowConnectorRecord" class="step-connector" aria-hidden="true"></span>
+            <div id="workflowStepRecord" class="step" data-step="record">
               <span class="step-number">2</span>
               <span>录音记录</span>
             </div>
-            <span class="step-connector" aria-hidden="true"></span>
-            <div class="step">
+            <span id="workflowConnectorReview" class="step-connector" aria-hidden="true"></span>
+            <div id="workflowStepReview" class="step" data-step="review">
               <span class="step-number">3</span>
               <span>审核定稿</span>
             </div>
@@ -118,7 +126,10 @@
                   <p>一边沟通，一边生成实时草稿</p>
                 </div>
               </div>
-              <span id="timer" class="timer">00:00</span>
+              <div class="recording-status-strip">
+                <span id="recordingStateBadge" class="state-badge idle">待录音</span>
+                <span id="timer" class="timer">00:00</span>
+              </div>
             </div>
             <div class="recorder-body">
               <div class="recorder-visual" aria-hidden="true">
@@ -132,6 +143,14 @@
                 <div class="waveform">
                   <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
                 </div>
+              </div>
+              <div class="recorder-health" aria-label="录音通道状态">
+                <span id="micState">麦克风待授权</span>
+                <span id="sherpaState">实时转写待连接</span>
+                <span id="modelState">整理接口未配置</span>
+              </div>
+              <div class="mic-meter" aria-label="实时语音信号强度">
+                <span id="micLevelBar"></span>
               </div>
               <div class="controls">
                 <button id="startBtn" type="button" class="primary-action">开始记录</button>
@@ -180,6 +199,7 @@
                   <h2>报告草稿</h2>
                   <p>医生复核后才能复制、打印或派生文书</p>
                 </div>
+                <span id="reportStageBadge" class="stage-badge muted">未生成</span>
               </div>
               <div class="title-actions">
                 <button id="generateReportBtn" type="button">生成报告</button>
@@ -190,6 +210,12 @@
               </div>
             </div>
             <div id="riskPanel" class="risk-panel" hidden></div>
+            <div class="document-tabs" role="tablist" aria-label="文档类型">
+              <button id="reportDocTab" type="button" class="document-tab active" data-document-mode="report" role="tab" aria-selected="true">病历草稿</button>
+              <button id="patientDocTab" type="button" class="document-tab" data-document-mode="patient" role="tab" aria-selected="false">患者说明</button>
+              <button id="referralDocTab" type="button" class="document-tab" data-document-mode="referral" role="tab" aria-selected="false">转诊信</button>
+            </div>
+            <div id="outputGateHint" class="gate-hint">录音、转写并完成医生审核后可输出文档。</div>
             <textarea id="reportEditor" class="report-editor" placeholder="录音结束后会自动生成报告草稿；也可以在医生核对后手动点击「生成报告」。&#10;&#10;报告内容仅供参考，最终诊断和治疗方案需由医生确认。"></textarea>
             <div id="evidencePanel" class="evidence-panel" hidden></div>
             <div id="auditPanel" class="audit-panel" hidden></div>
@@ -285,6 +311,32 @@
               </div>
             </div>
             <div class="panel-body">
+              <div class="clinical-tools" aria-label="口腔记录快捷工具">
+                <div class="clinical-tool-row">
+                  <span>牙位快捷</span>
+                  <div class="chip-row">
+                    <button type="button" class="chip-button" data-tooth-token="右上后牙">右上后牙</button>
+                    <button type="button" class="chip-button" data-tooth-token="左上后牙">左上后牙</button>
+                    <button type="button" class="chip-button" data-tooth-token="右下后牙">右下后牙</button>
+                    <button type="button" class="chip-button" data-tooth-token="左下后牙">左下后牙</button>
+                    <button type="button" class="chip-button" data-tooth-token="11">11</button>
+                    <button type="button" class="chip-button" data-tooth-token="21">21</button>
+                    <button type="button" class="chip-button" data-tooth-token="36">36</button>
+                    <button type="button" class="chip-button" data-tooth-token="46">46</button>
+                  </div>
+                </div>
+                <div class="clinical-tool-row">
+                  <span>风险速记</span>
+                  <div class="chip-row">
+                    <button type="button" class="chip-button" data-field-template="allergies" data-template-text="无已知药物、麻药或材料过敏。">无过敏</button>
+                    <button type="button" class="chip-button" data-field-template="allergies" data-template-text="青霉素过敏，需避免相关用药。">青霉素过敏</button>
+                    <button type="button" class="chip-button" data-field-template="medications" data-template-text="正在使用抗凝/抗血小板药，治疗前需确认用药方案。">抗凝药</button>
+                    <button type="button" class="chip-button" data-field-template="medicalHistory" data-template-text="糖尿病史，治疗前需确认血糖控制情况。">糖尿病</button>
+                    <button type="button" class="chip-button" data-field-template="medicalHistory" data-template-text="高血压病史，治疗前需确认血压控制情况。">高血压</button>
+                    <button type="button" class="chip-button" data-field-template="treatmentConsent" data-template-text="已告知治疗风险、替代方案、费用/疗程和复诊安排，患者表示理解。">同意要点</button>
+                  </div>
+                </div>
+              </div>
               <div class="clinical-grid">
                 <label class="field-group">
                   <span>全身病史</span>
@@ -417,6 +469,7 @@
         </select>
         <textarea class="segment-text" rows="2"></textarea>
         <button class="ghost icon-button segment-delete" type="button" title="删除">删除</button>
+        <div class="segment-insights" aria-label="片段风险与牙位提示"></div>
       </article>
     </template>
 
