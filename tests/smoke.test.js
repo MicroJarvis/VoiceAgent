@@ -121,6 +121,10 @@ try {
   assert(html.includes("data-document-mode=\"patient\""), "page should include patient summary document tab");
   assert(html.includes("data-tooth-token=\"右下后牙\""), "page should include tooth shortcut chips");
   assert(html.includes("data-field-template=\"allergies\""), "page should include clinical risk templates");
+  assert(html.includes("id=\"odontogram\""), "page should include odontogram panel");
+  assert(html.includes("id=\"upperArch\""), "page should include upper jaw tooth row");
+  assert(html.includes("id=\"lowerArch\""), "page should include lower jaw tooth row");
+  assert(html.includes("id=\"toothFindingSummary\""), "page should include tooth finding summary");
 
   const appJs = await fetchText(`http://127.0.0.1:${appPort}/app.js`);
   assert(appJs.includes("apiKey: \"\""), "frontend should not persist API keys in settings");
@@ -134,6 +138,11 @@ try {
   assert(appJs.includes("renderOutputGateHint"), "frontend should explain blocked output actions");
   assert(appJs.includes("extractToothMentions"), "frontend should highlight dental locations in transcript");
   assert(appJs.includes("extractRiskMentions"), "frontend should highlight clinical risk terms in transcript");
+  assert(appJs.includes("renderOdontogram"), "frontend should render a dental tooth chart");
+  assert(appJs.includes("upperTeeth"), "frontend should model upper jaw teeth");
+  assert(appJs.includes("lowerTeeth"), "frontend should model lower jaw teeth");
+  assert(appJs.includes("extractDentalFindings"), "frontend should extract tooth findings from clinical text");
+  assert(appJs.includes("spokenToothToFdi"), "frontend should map spoken tooth locations to FDI tooth numbers");
 
   const settings = {
     apiKey: "test-key",

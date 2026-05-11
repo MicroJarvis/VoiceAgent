@@ -29,6 +29,7 @@ const state = {
   auditLog: [],
   report: null,
   reportText: "",
+  toothFindings: [],
   documentMode: "report",
   patientSummaryText: "",
   referralLetterText: "",
@@ -40,6 +41,19 @@ const state = {
 };
 
 const sherpaTargetSampleRate = 16000;
+const upperTeeth = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"];
+const lowerTeeth = ["48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38"];
+const allTeeth = [...upperTeeth, ...lowerTeeth];
+const regionToTeeth = {
+  右上前牙: ["13", "12", "11"],
+  右上后牙: ["18", "17", "16", "15", "14"],
+  左上前牙: ["21", "22", "23"],
+  左上后牙: ["24", "25", "26", "27", "28"],
+  右下前牙: ["43", "42", "41"],
+  右下后牙: ["48", "47", "46", "45", "44"],
+  左下前牙: ["31", "32", "33"],
+  左下后牙: ["34", "35", "36", "37", "38"]
+};
 
 const els = {
   statusText: document.querySelector("#statusText"),
@@ -99,6 +113,9 @@ const els = {
   segmentTemplate: document.querySelector("#segmentTemplate"),
   extractPerioBtn: document.querySelector("#extractPerioBtn"),
   perioChart: document.querySelector("#perioChart"),
+  upperArch: document.querySelector("#upperArch"),
+  lowerArch: document.querySelector("#lowerArch"),
+  toothFindingSummary: document.querySelector("#toothFindingSummary"),
   generateReportBtn: document.querySelector("#generateReportBtn"),
   patientSummaryBtn: document.querySelector("#patientSummaryBtn"),
   referralLetterBtn: document.querySelector("#referralLetterBtn"),
@@ -154,8 +171,10 @@ function init() {
   els.visitDate.valueAsDate = new Date();
   loadSettings();
   bindEvents();
+  renderOdontogram();
   renderSegments();
   renderClinicalAlerts();
+  updateToothFindings();
   renderEvidence();
   renderAuditLog();
   renderWorkflowState();
@@ -216,6 +235,7 @@ function bindEvents() {
     els[key].addEventListener("input", () => {
       invalidateReview(["historyReviewed", "planReviewed", "finalReviewed"]);
       renderClinicalAlerts();
+      updateToothFindings();
       renderWorkflowState();
     });
   });
@@ -490,6 +510,7 @@ async function transcribeRecording(options = {}) {
     invalidateReview(["transcriptReviewed", "finalReviewed"]);
     renderSegments();
     renderClinicalAlerts();
+    updateToothFindings();
     addAuditEvent(`完成本地转写：${state.segments.length} 条片段`);
     setStatus("转写完成");
     setRecorderNote(`转写完成，共生成 ${state.segments.length} 条初始文本片段。请核对文本、说话人和牙位后勾选医生审核关口。`);
@@ -502,6 +523,7 @@ async function transcribeRecording(options = {}) {
       invalidateReview(["transcriptReviewed", "finalReviewed"]);
       renderSegments();
       renderClinicalAlerts();
+      updateToothFindings();
       addAuditEvent("本地 Whisper 最终转写失败，保留 sherpa 实时草稿");
       setStatus("已保留实时草稿", "error");
       setRecorderNote(`最终 Whisper 转写失败，已保留实时草稿，请修正设置后可手动重试：${error.message}`, "error");
@@ -704,6 +726,7 @@ function handleSherpaMessage(data) {
   invalidateReview(["transcriptReviewed", "finalReviewed"]);
   renderSegments();
   renderClinicalAlerts();
+  updateToothFindings();
   updateActionStates();
   setRecorderNote(`实时草稿已更新：已发送 ${state.sherpaChunksSent} 个音频块，收到 ${state.sherpaMessagesReceived} 条识别消息。`, "busy");
 }
@@ -821,6 +844,7 @@ async function aiSegmentTranscript(options = {}) {
       }
       renderSegments();
       renderClinicalAlerts();
+      updateToothFindings();
       addAuditEvent(options.automatic ? "结束后自动 AI 校对转写稿" : "AI 标注对话角色");
       setStatus(options.automatic ? "转写已自动校对" : "对话已整理，请复核");
       updateActionStates();
@@ -873,6 +897,7 @@ function applySherpaDraftForFinalization() {
   invalidateReview(["transcriptReviewed", "finalReviewed"]);
   renderSegments();
   renderClinicalAlerts();
+  updateToothFindings();
   addAuditEvent("使用 sherpa 实时草稿作为结束后校对输入");
   setStatus("实时草稿待校对", "busy");
   setRecorderNote("录音结束，正在用 sherpa 实时草稿做 AI 角色校对并生成报告草稿。", "busy");
@@ -1031,6 +1056,7 @@ function addManualSegment() {
   invalidateReview(["transcriptReviewed", "finalReviewed"]);
   renderSegments();
   renderClinicalAlerts();
+  updateToothFindings();
   addAuditEvent("手动新增对话片段");
   updateActionStates();
   setStatus("已新增");
@@ -1061,6 +1087,7 @@ function renderSegments() {
       state.segments[index].speaker = speaker.value;
       invalidateReview(["transcriptReviewed", "finalReviewed"]);
       renderClinicalAlerts();
+      updateToothFindings();
       addAuditEvent(`修改片段 ${index + 1} 说话人`);
       updateActionStates();
     });
@@ -1068,6 +1095,7 @@ function renderSegments() {
       state.segments[index].text = text.value;
       invalidateReview(["transcriptReviewed", "finalReviewed"]);
       renderClinicalAlerts();
+      updateToothFindings();
       updateActionStates();
     });
     text.addEventListener("change", () => {
@@ -1078,6 +1106,7 @@ function renderSegments() {
       invalidateReview(["transcriptReviewed", "finalReviewed"]);
       renderSegments();
       renderClinicalAlerts();
+      updateToothFindings();
       addAuditEvent(`删除片段 ${index + 1}`);
       updateActionStates();
     });
@@ -1104,13 +1133,7 @@ function segmentInsights(text) {
 }
 
 function extractToothMentions(text) {
-  const value = String(text || "");
-  const mentions = [];
-  const toothMatches = value.match(/\b(?:[1-4][1-8])\b/g) || [];
-  mentions.push(...toothMatches);
-  const quadrantMatches = value.match(/(?:左|右)(?:上|下)(?:前牙|后牙|磨牙|牙|智齿)/g) || [];
-  mentions.push(...quadrantMatches);
-  return unique(mentions).slice(0, 5);
+  return unique(extractDentalFindings(text).flatMap((finding) => finding.teeth.length ? finding.teeth : [finding.region])).slice(0, 5);
 }
 
 function extractRiskMentions(text) {
@@ -1133,6 +1156,7 @@ function insertToothToken(token) {
   target.focus();
   invalidateReview(["historyReviewed", "planReviewed", "finalReviewed"]);
   renderClinicalAlerts();
+  updateToothFindings();
   renderWorkflowState();
   addAuditEvent(`插入牙位快捷：${token}`);
 }
@@ -1145,8 +1169,267 @@ function applyFieldTemplate(field, text) {
   input.focus();
   invalidateReview(["historyReviewed", "planReviewed", "finalReviewed"]);
   renderClinicalAlerts();
+  updateToothFindings();
   renderWorkflowState();
   addAuditEvent(`插入临床速记：${field}`);
+}
+
+function renderOdontogram() {
+  renderArch(els.upperArch, upperTeeth, "upper");
+  renderArch(els.lowerArch, lowerTeeth, "lower");
+}
+
+function renderArch(parent, teeth, arch) {
+  parent.innerHTML = "";
+  teeth.forEach((toothId) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `tooth ${arch}`;
+    button.dataset.tooth = toothId;
+    button.setAttribute("aria-label", `${toothId} 牙`);
+    button.innerHTML = [
+      `<span class="tooth-number">${toothId}</span>`,
+      '<span class="tooth-finding"></span>'
+    ].join("");
+    button.addEventListener("click", () => insertToothToken(toothId));
+    parent.append(button);
+  });
+}
+
+function updateToothFindings() {
+  state.toothFindings = extractDentalFindings(buildDentalFindingSource());
+  const byTooth = new Map();
+  const scoped = [];
+  state.toothFindings.forEach((finding) => {
+    if (finding.teeth.length) {
+      finding.teeth.forEach((toothId) => {
+        byTooth.set(toothId, mergeToothFinding(byTooth.get(toothId), finding));
+      });
+    } else if (finding.scopeTeeth.length) {
+      scoped.push(finding);
+      finding.scopeTeeth.forEach((toothId) => {
+        byTooth.set(toothId, mergeToothFinding(byTooth.get(toothId), finding));
+      });
+    }
+  });
+
+  document.querySelectorAll(".tooth[data-tooth]").forEach((node) => {
+    const toothId = node.dataset.tooth;
+    const finding = byTooth.get(toothId);
+    const findingLabel = node.querySelector(".tooth-finding");
+    node.classList.toggle("active", Boolean(finding?.exact));
+    node.classList.toggle("scope", Boolean(finding && !finding.exact));
+    node.classList.toggle("has-risk", Boolean(finding?.risk));
+    findingLabel.textContent = finding ? compactFindingLabel(finding) : "";
+    node.title = finding ? toothTitle(toothId, finding) : `${toothId} 牙`;
+  });
+
+  renderToothFindingSummary(scoped);
+}
+
+function buildDentalFindingSource() {
+  const encounter = readEncounter();
+  const transcript = state.segments
+    .map((segment) => `${speakerLabel(segment.speaker)}：${segment.text}`)
+    .join("\n");
+  return [
+    encounter.chiefNote,
+    encounter.examFindings,
+    encounter.perioChart,
+    encounter.imagingFindings,
+    encounter.diagnoses,
+    encounter.treatmentConsent,
+    encounter.followUp,
+    transcript
+  ].filter(Boolean).join("\n");
+}
+
+function extractDentalFindings(text) {
+  const sentences = splitClinicalSentences(text);
+  const findings = [];
+  sentences.forEach((sentence) => {
+    const teeth = extractExactTeeth(sentence);
+    const regions = extractToothRegions(sentence);
+    const symptoms = extractDentalSymptoms(sentence);
+    const risk = extractRiskMentions(sentence).length > 0;
+    teeth.forEach((toothId) => {
+      findings.push({
+        teeth: [toothId],
+        scopeTeeth: [],
+        region: "",
+        symptoms,
+        sourceText: sentence,
+        exact: true,
+        risk
+      });
+    });
+    if (!teeth.length) {
+      regions.forEach((region) => {
+        findings.push({
+          teeth: [],
+          scopeTeeth: regionToTeeth[region] || [],
+          region,
+          symptoms,
+          sourceText: sentence,
+          exact: false,
+          risk
+        });
+      });
+    }
+  });
+  return findings.filter((finding) => finding.teeth.length || finding.scopeTeeth.length);
+}
+
+function splitClinicalSentences(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .split(/(?<=[。！？!?；;])\s*|[\n\r]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function extractExactTeeth(sentence) {
+  const value = normalizeDentalText(sentence);
+  const found = [];
+  const fdiPattern = /(?<![\dA-Za-z])([1-4][1-8])(?![\dA-Za-z岁年月日号楼室层])/g;
+  let fdiMatch;
+  while ((fdiMatch = fdiPattern.exec(value))) {
+    const toothId = fdiMatch[1];
+    if (allTeeth.includes(toothId) && (hasDentalContext(value, fdiMatch.index) || isStandaloneToothMention(value, toothId))) {
+      found.push(toothId);
+    }
+  }
+
+  const spokenPattern = /(右上|左上|右下|左下)(?:第)?([一二三四五六七八1-8])(?:号|颗|的)?(?:牙|磨牙|前磨牙|前牙|后牙|智齿)?/g;
+  let match;
+  while ((match = spokenPattern.exec(value))) {
+    const toothId = spokenToothToFdi(match[1], match[2]);
+    if (toothId) found.push(toothId);
+  }
+
+  return unique(found);
+}
+
+function extractToothRegions(sentence) {
+  const value = normalizeDentalText(sentence);
+  const found = [];
+  const regionPattern = /(右上|左上|右下|左下)(前牙|后牙|磨牙|智齿|牙区|牙)/g;
+  let match;
+  while ((match = regionPattern.exec(value))) {
+    const region = normalizeRegion(match[1], match[2]);
+    if (region) found.push(region);
+  }
+  return unique(found);
+}
+
+function hasDentalContext(text, index) {
+  const windowText = text.slice(Math.max(0, index - 12), index + 18);
+  return /牙|齿|龋|蛀|痛|疼|酸|胀|冠|根管|拔|种植|牙周|探诊|松动|叩|冷热|智齿|近中|远中|颊|舌|腭|唇|BOP|PD|mm|毫米/.test(windowText);
+}
+
+function isStandaloneToothMention(text, toothId) {
+  return new RegExp(`(^|[，,、；;\\s])${toothId}($|[，,、；;\\s])`).test(text);
+}
+
+function extractDentalSymptoms(sentence) {
+  const value = normalizeDentalText(sentence);
+  const symptoms = [
+    [/疼|痛|酸|胀|咬合痛|冷热痛|自发痛|夜间痛/, "疼痛"],
+    [/龋|蛀|洞|缺损|崩|裂/, "龋/缺损"],
+    [/牙龈|出血|BOP|探诊|牙周|牙袋|袋|附着|龈退缩/, "牙周"],
+    [/松动|动度/, "松动"],
+    [/肿|脓|瘘|炎|感染/, "炎症"],
+    [/根管|开髓|牙髓/, "根管"],
+    [/拔牙|拔除/, "拔牙"],
+    [/种植|植骨|骨粉/, "种植"],
+    [/阻生|智齿/, "智齿"],
+    [/修复|冠|嵌体|补牙|充填/, "修复"]
+  ];
+  const labels = symptoms.filter(([pattern]) => pattern.test(value)).map(([, label]) => label);
+  return labels.length ? unique(labels) : ["待确认"];
+}
+
+function normalizeDentalText(text) {
+  return String(text || "")
+    .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function spokenToothToFdi(quadrantText, toothText) {
+  const quadrant = { 右上: "1", 左上: "2", 左下: "3", 右下: "4" }[quadrantText];
+  const index = chineseNumberToDigit(toothText);
+  const toothId = quadrant && index ? `${quadrant}${index}` : "";
+  return allTeeth.includes(toothId) ? toothId : "";
+}
+
+function chineseNumberToDigit(value) {
+  return {
+    一: "1",
+    二: "2",
+    三: "3",
+    四: "4",
+    五: "5",
+    六: "6",
+    七: "7",
+    八: "8",
+    "1": "1",
+    "2": "2",
+    "3": "3",
+    "4": "4",
+    "5": "5",
+    "6": "6",
+    "7": "7",
+    "8": "8"
+  }[String(value || "")] || "";
+}
+
+function normalizeRegion(quadrant, type) {
+  if (type === "前牙") return `${quadrant}前牙`;
+  if (type === "后牙" || type === "磨牙" || type === "智齿") return `${quadrant}后牙`;
+  if (type === "牙区" || type === "牙") return `${quadrant}后牙`;
+  return "";
+}
+
+function mergeToothFinding(existing, next) {
+  if (!existing) {
+    return {
+      exact: next.exact,
+      risk: next.risk,
+      symptoms: [...next.symptoms],
+      sources: [next.sourceText],
+      region: next.region
+    };
+  }
+  return {
+    exact: existing.exact || next.exact,
+    risk: existing.risk || next.risk,
+    symptoms: unique([...existing.symptoms, ...next.symptoms]),
+    sources: unique([...existing.sources, next.sourceText]).slice(0, 4),
+    region: existing.region || next.region
+  };
+}
+
+function compactFindingLabel(finding) {
+  return finding.symptoms.filter((label) => label !== "待确认").slice(0, 1)[0] || "待确认";
+}
+
+function toothTitle(toothId, finding) {
+  return [
+    `${toothId} 牙`,
+    finding.exact ? "明确提及" : `范围提及：${finding.region || "待确认区域"}`,
+    `症状：${finding.symptoms.join("、")}`,
+    finding.sources[0] && `依据：${finding.sources[0]}`
+  ].filter(Boolean).join("\n");
+}
+
+function renderToothFindingSummary(scoped) {
+  const exactItems = state.toothFindings
+    .filter((finding) => finding.teeth.length)
+    .flatMap((finding) => finding.teeth.map((toothId) => `${toothId}：${finding.symptoms.join("、")}`));
+  const scopeItems = scoped.map((finding) => `${finding.region}：${finding.symptoms.join("、")}（范围待确认）`);
+  const items = unique([...exactItems, ...scopeItems]).slice(0, 8);
+  els.toothFindingSummary.textContent = items.length ? items.join("；") : "尚未识别到明确牙位。";
 }
 
 function renderReport(report) {
@@ -1209,6 +1492,7 @@ function extractPerioChart() {
   els.perioChart.value = [existing, ...lines].filter(Boolean).join(existing ? "\n" : "");
   invalidateReview(["historyReviewed", "planReviewed", "finalReviewed"]);
   renderClinicalAlerts();
+  updateToothFindings();
   addAuditEvent(`摘录牙周/检查指标：${lines.length} 条`);
   setStatus("已摘录检查指标");
 }
@@ -1323,6 +1607,7 @@ function loadCase() {
     state.lastGeneratedAt = saved.lastGeneratedAt || "";
     renderSegments();
     renderClinicalAlerts();
+    updateToothFindings();
     renderEvidence();
     renderAuditLog();
     if (state.report) {
