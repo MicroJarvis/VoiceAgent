@@ -1,0 +1,1661 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DentAI - 口腔诊疗智能记录</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ========================================
+       CSS VARIABLES & DESIGN TOKENS
+    ======================================== */
+    :root {
+      /* Colors */
+      --blue-50: #eff6ff;
+      --blue-100: #dbeafe;
+      --blue-200: #bfdbfe;
+      --blue-300: #93c5fd;
+      --blue-400: #60a5fa;
+      --blue-500: #3b82f6;
+      --blue-600: #2563eb;
+      --blue-700: #1d4ed8;
+      --blue-800: #1e40af;
+      --blue-900: #1e3a8a;
+
+      --cyan-50: #ecfeff;
+      --cyan-100: #cffafe;
+      --cyan-400: #22d3ee;
+      --cyan-500: #06b6d4;
+      --cyan-600: #0891b2;
+
+      --green-50: #f0fdf4;
+      --green-100: #dcfce7;
+      --green-500: #22c55e;
+      --green-600: #16a34a;
+      --green-700: #15803d;
+
+      --amber-50: #fffbeb;
+      --amber-100: #fef3c7;
+      --amber-500: #f59e0b;
+      --amber-600: #d97706;
+
+      --red-50: #fef2f2;
+      --red-100: #fee2e2;
+      --red-400: #f87171;
+      --red-500: #ef4444;
+      --red-600: #dc2626;
+
+      --slate-50: #f8fafc;
+      --slate-100: #f1f5f9;
+      --slate-200: #e2e8f0;
+      --slate-300: #cbd5e1;
+      --slate-400: #94a3b8;
+      --slate-500: #64748b;
+      --slate-600: #475569;
+      --slate-700: #334155;
+      --slate-800: #1e293b;
+      --slate-900: #0f172a;
+
+      /* Spacing */
+      --space-1: 0.25rem;
+      --space-2: 0.5rem;
+      --space-3: 0.75rem;
+      --space-4: 1rem;
+      --space-5: 1.25rem;
+      --space-6: 1.5rem;
+      --space-8: 2rem;
+      --space-10: 2.5rem;
+      --space-12: 3rem;
+
+      /* Typography */
+      --font-sans: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --text-xs: 0.75rem;
+      --text-sm: 0.8125rem;
+      --text-base: 0.875rem;
+      --text-lg: 1rem;
+      --text-xl: 1.125rem;
+      --text-2xl: 1.375rem;
+      --text-3xl: 1.75rem;
+
+      /* Radius */
+      --radius-sm: 6px;
+      --radius: 8px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 18px;
+      --radius-2xl: 24px;
+      --radius-full: 9999px;
+
+      /* Shadows */
+      --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+      --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.08), 0 8px 10px -6px rgba(0,0,0,0.04);
+
+      /* Layout */
+      --sidebar-width: 260px;
+      --header-height: 56px;
+    }
+
+    /* ========================================
+       RESET & BASE
+    ======================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--slate-50);
+      color: var(--slate-800);
+      line-height: 1.5;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ========================================
+       APP LAYOUT
+    ======================================== */
+    .app {
+      display: grid;
+      grid-template-columns: var(--sidebar-width) 1fr;
+      grid-template-rows: var(--header-height) 1fr;
+      height: 100vh;
+    }
+
+    /* ========================================
+       SIDEBAR
+    ======================================== */
+    .sidebar {
+      grid-row: 1 / -1;
+      background: var(--slate-900);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      border-right: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .sidebar-brand {
+      padding: var(--space-5) var(--space-5);
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .sidebar-logo {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--blue-500), var(--cyan-500));
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .sidebar-brand-text h1 {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .sidebar-brand-text p {
+      font-size: var(--text-xs);
+      color: var(--slate-400);
+      margin-top: -2px;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: var(--space-4) var(--space-3);
+    }
+
+    .nav-section {
+      margin-bottom: var(--space-6);
+    }
+
+    .nav-section-title {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      color: var(--slate-500);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0 var(--space-3);
+      margin-bottom: var(--space-2);
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius);
+      color: var(--slate-400);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      margin-bottom: 2px;
+    }
+
+    .nav-item:hover {
+      background: rgba(255,255,255,0.06);
+      color: white;
+    }
+
+    .nav-item.active {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--blue-400);
+    }
+
+    .nav-item-icon {
+      width: 18px;
+      height: 18px;
+      opacity: 0.7;
+    }
+
+    .nav-item.active .nav-item-icon {
+      opacity: 1;
+    }
+
+    .nav-item-badge {
+      margin-left: auto;
+      background: var(--blue-600);
+      color: white;
+      font-size: 0.625rem;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: var(--radius-full);
+    }
+
+    /* Patient List in Sidebar */
+    .patient-list {
+      padding: 0 var(--space-3);
+    }
+
+    .patient-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      margin-bottom: 2px;
+    }
+
+    .patient-item:hover {
+      background: rgba(255,255,255,0.06);
+    }
+
+    .patient-item.active {
+      background: rgba(59, 130, 246, 0.12);
+    }
+
+    .patient-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius-full);
+      background: var(--slate-700);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--slate-300);
+      flex-shrink: 0;
+    }
+
+    .patient-item.active .patient-avatar {
+      background: var(--blue-600);
+      color: white;
+    }
+
+    .patient-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .patient-name {
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--slate-300);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .patient-item.active .patient-name {
+      color: white;
+    }
+
+    .patient-meta {
+      font-size: 0.6875rem;
+      color: var(--slate-500);
+    }
+
+    .patient-status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .patient-status.recording { background: var(--red-500); animation: pulse-dot 1.5s infinite; }
+    .patient-status.completed { background: var(--green-500); }
+    .patient-status.pending { background: var(--amber-500); }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .sidebar-footer {
+      padding: var(--space-4) var(--space-5);
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .sidebar-user {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .sidebar-user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-full);
+      background: linear-gradient(135deg, var(--blue-600), var(--cyan-600));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: white;
+    }
+
+    .sidebar-user-info {
+      flex: 1;
+    }
+
+    .sidebar-user-name {
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: white;
+    }
+
+    .sidebar-user-role {
+      font-size: 0.6875rem;
+      color: var(--slate-500);
+    }
+
+    /* ========================================
+       HEADER
+    ======================================== */
+    .app-header {
+      background: white;
+      border-bottom: 1px solid var(--slate-200);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--space-6);
+      z-index: 50;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+
+    .header-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--slate-500);
+    }
+
+    .header-breadcrumb span {
+      color: var(--slate-800);
+      font-weight: 500;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    /* ========================================
+       BUTTONS
+    ======================================== */
+    .btn {
+      font-family: var(--font-sans);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      border: none;
+      border-radius: var(--radius);
+      padding: var(--space-2) var(--space-4);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      white-space: nowrap;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--blue-600);
+      color: white;
+      box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+    }
+    .btn-primary:hover { background: var(--blue-700); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); }
+
+    .btn-secondary {
+      background: white;
+      color: var(--slate-700);
+      border: 1px solid var(--slate-200);
+    }
+    .btn-secondary:hover { background: var(--slate-50); border-color: var(--slate-300); }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--slate-600);
+      padding: var(--space-2);
+    }
+    .btn-ghost:hover { background: var(--slate-100); color: var(--slate-800); }
+
+    .btn-danger {
+      background: var(--red-50);
+      color: var(--red-600);
+      border: 1px solid var(--red-100);
+    }
+    .btn-danger:hover { background: var(--red-100); }
+
+    .btn-success {
+      background: var(--green-600);
+      color: white;
+    }
+    .btn-success:hover { background: var(--green-700); transform: translateY(-1px); }
+
+    .btn-lg {
+      padding: var(--space-3) var(--space-6);
+      font-size: var(--text-base);
+      border-radius: var(--radius-md);
+    }
+
+    .btn-sm {
+      padding: var(--space-1) var(--space-3);
+      font-size: var(--text-xs);
+      border-radius: var(--radius-sm);
+    }
+
+    .btn-icon {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius);
+    }
+
+    button:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+    /* ========================================
+       MAIN CONTENT AREA
+    ======================================== */
+    .main-content {
+      overflow-y: auto;
+      padding: var(--space-6);
+      display: flex;
+      gap: var(--space-6);
+    }
+
+    /* ========================================
+       WORKFLOW STEPPER
+    ======================================== */
+    .workflow-steps {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: var(--space-6);
+      background: white;
+      border-radius: var(--radius-lg);
+      padding: var(--space-3) var(--space-4);
+      border: 1px solid var(--slate-200);
+      box-shadow: var(--shadow-xs);
+    }
+
+    .step {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--slate-400);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+
+    .step.active {
+      background: var(--blue-50);
+      color: var(--blue-700);
+    }
+
+    .step.completed {
+      color: var(--green-600);
+    }
+
+    .step-number {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      border: 2px solid currentColor;
+      flex-shrink: 0;
+    }
+
+    .step.active .step-number {
+      background: var(--blue-600);
+      color: white;
+      border-color: var(--blue-600);
+    }
+
+    .step.completed .step-number {
+      background: var(--green-600);
+      color: white;
+      border-color: var(--green-600);
+    }
+
+    .step-connector {
+      width: 32px;
+      height: 2px;
+      background: var(--slate-200);
+      flex-shrink: 0;
+    }
+
+    .step-connector.completed {
+      background: var(--green-500);
+    }
+
+    /* ========================================
+       CENTER PANEL (Main Work Area)
+    ======================================== */
+    .center-panel {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-5);
+    }
+
+    /* ========================================
+       CARD
+    ======================================== */
+    .card {
+      background: white;
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--slate-200);
+      overflow: hidden;
+      transition: box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow-md);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--slate-100);
+    }
+
+    .card-header-left {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .card-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-icon.blue { background: var(--blue-100); color: var(--blue-600); }
+    .card-icon.green { background: var(--green-100); color: var(--green-600); }
+    .card-icon.amber { background: var(--amber-100); color: var(--amber-600); }
+    .card-icon.red { background: var(--red-100); color: var(--red-600); }
+    .card-icon.cyan { background: var(--cyan-100); color: var(--cyan-600); }
+
+    .card-title {
+      font-size: var(--text-base);
+      font-weight: 600;
+      color: var(--slate-800);
+    }
+
+    .card-subtitle {
+      font-size: var(--text-xs);
+      color: var(--slate-500);
+    }
+
+    .card-body {
+      padding: var(--space-5);
+    }
+
+    .card-footer {
+      padding: var(--space-3) var(--space-5);
+      border-top: 1px solid var(--slate-100);
+      background: var(--slate-50);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* ========================================
+       RECORDING CARD (Hero State)
+    ======================================== */
+    .recording-hero {
+      text-align: center;
+      padding: var(--space-10) var(--space-8);
+    }
+
+    .recording-orb {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      margin: 0 auto var(--space-6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: linear-gradient(135deg, var(--blue-50), var(--blue-100));
+      border: 3px solid var(--blue-200);
+      transition: all 0.3s ease;
+    }
+
+    .recording-orb.is-recording {
+      background: linear-gradient(135deg, var(--red-50), var(--red-100));
+      border-color: var(--red-300);
+      animation: orb-pulse 2s ease-in-out infinite;
+    }
+
+    .recording-orb.is-recording::before {
+      content: '';
+      position: absolute;
+      inset: -12px;
+      border-radius: 50%;
+      border: 2px solid var(--red-200);
+      animation: orb-ring 2s ease-in-out infinite;
+    }
+
+    .recording-orb.is-recording::after {
+      content: '';
+      position: absolute;
+      inset: -24px;
+      border-radius: 50%;
+      border: 1px solid var(--red-100);
+      animation: orb-ring 2s ease-in-out infinite 0.3s;
+    }
+
+    @keyframes orb-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+
+    @keyframes orb-ring {
+      0%, 100% { opacity: 0.6; transform: scale(1); }
+      50% { opacity: 0.2; transform: scale(1.05); }
+    }
+
+    .recording-orb-icon {
+      color: var(--blue-500);
+      transition: color 0.3s ease;
+    }
+
+    .recording-orb.is-recording .recording-orb-icon {
+      color: var(--red-500);
+    }
+
+    .recording-timer {
+      font-size: var(--text-3xl);
+      font-weight: 700;
+      color: var(--slate-800);
+      font-variant-numeric: tabular-nums;
+      margin-bottom: var(--space-2);
+      letter-spacing: -0.02em;
+    }
+
+    .recording-status {
+      font-size: var(--text-sm);
+      color: var(--slate-500);
+      margin-bottom: var(--space-6);
+    }
+
+    .recording-status.is-recording {
+      color: var(--red-500);
+      font-weight: 500;
+    }
+
+    .recording-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-4);
+    }
+
+    .btn-record-main {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      background: var(--blue-600);
+      color: white;
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);
+    }
+
+    .btn-record-main:hover {
+      transform: scale(1.08);
+      box-shadow: 0 6px 24px rgba(37, 99, 235, 0.4);
+    }
+
+    .btn-record-main.is-recording {
+      background: var(--red-500);
+      box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35);
+    }
+
+    .btn-record-main.is-recording:hover {
+      box-shadow: 0 6px 24px rgba(239, 68, 68, 0.4);
+    }
+
+    /* Waveform */
+    .waveform-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      height: 40px;
+      margin: var(--space-4) 0;
+    }
+
+    .waveform-bar {
+      width: 3px;
+      border-radius: 2px;
+      background: var(--blue-300);
+      animation: wave-anim 1s ease-in-out infinite;
+    }
+
+    .waveform-bar:nth-child(1) { height: 30%; animation-delay: 0s; }
+    .waveform-bar:nth-child(2) { height: 50%; animation-delay: 0.1s; }
+    .waveform-bar:nth-child(3) { height: 70%; animation-delay: 0.15s; }
+    .waveform-bar:nth-child(4) { height: 90%; animation-delay: 0.2s; }
+    .waveform-bar:nth-child(5) { height: 60%; animation-delay: 0.25s; }
+    .waveform-bar:nth-child(6) { height: 80%; animation-delay: 0.3s; }
+    .waveform-bar:nth-child(7) { height: 45%; animation-delay: 0.35s; }
+    .waveform-bar:nth-child(8) { height: 65%; animation-delay: 0.4s; }
+    .waveform-bar:nth-child(9) { height: 35%; animation-delay: 0.45s; }
+    .waveform-bar:nth-child(10) { height: 55%; animation-delay: 0.5s; }
+    .waveform-bar:nth-child(11) { height: 75%; animation-delay: 0.55s; }
+    .waveform-bar:nth-child(12) { height: 40%; animation-delay: 0.6s; }
+
+    @keyframes wave-anim {
+      0%, 100% { transform: scaleY(0.4); }
+      50% { transform: scaleY(1); }
+    }
+
+    .recording-hint {
+      font-size: var(--text-xs);
+      color: var(--slate-400);
+      margin-top: var(--space-4);
+    }
+
+    /* ========================================
+       TRANSCRIPT PANEL
+    ======================================== */
+    .transcript-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .transcript-msg {
+      display: flex;
+      gap: var(--space-3);
+      padding: var(--space-3);
+      border-radius: var(--radius-lg);
+      transition: background 0.15s ease;
+    }
+
+    .transcript-msg:hover {
+      background: var(--slate-50);
+    }
+
+    .transcript-msg-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .transcript-msg-avatar.doctor {
+      background: var(--blue-100);
+      color: var(--blue-700);
+    }
+
+    .transcript-msg-avatar.patient {
+      background: var(--green-100);
+      color: var(--green-700);
+    }
+
+    .transcript-msg-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .transcript-msg-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-bottom: var(--space-1);
+    }
+
+    .transcript-msg-name {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--slate-700);
+    }
+
+    .transcript-msg-time {
+      font-size: var(--text-xs);
+      color: var(--slate-400);
+    }
+
+    .transcript-msg-text {
+      font-size: var(--text-sm);
+      color: var(--slate-600);
+      line-height: 1.6;
+    }
+
+    /* ========================================
+       RIGHT PANEL (Context)
+    ======================================== */
+    .right-panel {
+      width: 320px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-5);
+    }
+
+    /* Patient Info Card */
+    .patient-card {
+      text-align: center;
+    }
+
+    .patient-card-avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue-100), var(--cyan-100));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto var(--space-3);
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--blue-600);
+    }
+
+    .patient-card-name {
+      font-size: var(--text-lg);
+      font-weight: 600;
+      color: var(--slate-800);
+    }
+
+    .patient-card-id {
+      font-size: var(--text-xs);
+      color: var(--slate-500);
+      margin-bottom: var(--space-4);
+    }
+
+    .patient-card-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-3);
+      text-align: left;
+    }
+
+    .patient-detail-item {
+      padding: var(--space-2) var(--space-3);
+      background: var(--slate-50);
+      border-radius: var(--radius);
+    }
+
+    .patient-detail-label {
+      font-size: 0.6875rem;
+      color: var(--slate-500);
+      margin-bottom: 2px;
+    }
+
+    .patient-detail-value {
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--slate-700);
+    }
+
+    /* Review Progress */
+    .review-progress {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .review-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3);
+      border-radius: var(--radius);
+      border: 1px solid var(--slate-100);
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+
+    .review-item:hover {
+      border-color: var(--blue-200);
+      background: var(--blue-50);
+    }
+
+    .review-item.checked {
+      border-color: var(--green-200);
+      background: var(--green-50);
+    }
+
+    .review-checkbox {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid var(--slate-300);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.15s ease;
+    }
+
+    .review-item.checked .review-checkbox {
+      background: var(--green-500);
+      border-color: var(--green-500);
+    }
+
+    .review-item-text {
+      font-size: var(--text-xs);
+      color: var(--slate-600);
+      line-height: 1.4;
+    }
+
+    /* ========================================
+       REPORT EDITOR
+    ======================================== */
+    .report-editor-area {
+      min-height: 400px;
+      font-family: var(--font-sans);
+      font-size: var(--text-sm);
+      line-height: 1.8;
+      padding: var(--space-5);
+      border: none;
+      resize: vertical;
+      width: 100%;
+      color: var(--slate-700);
+    }
+
+    .report-editor-area:focus {
+      outline: none;
+      background: var(--blue-50);
+    }
+
+    .report-editor-area::placeholder {
+      color: var(--slate-400);
+    }
+
+    /* ========================================
+       FORM FIELDS
+    ======================================== */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: var(--space-4);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+
+    .form-label {
+      font-size: var(--text-xs);
+      font-weight: 500;
+      color: var(--slate-600);
+    }
+
+    .form-input {
+      font-family: var(--font-sans);
+      font-size: var(--text-sm);
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--slate-200);
+      border-radius: var(--radius);
+      background: white;
+      color: var(--slate-800);
+      transition: all 0.15s ease;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--blue-400);
+      box-shadow: 0 0 0 3px var(--blue-50);
+    }
+
+    .form-textarea {
+      font-family: var(--font-sans);
+      font-size: var(--text-sm);
+      padding: var(--space-3);
+      border: 1px solid var(--slate-200);
+      border-radius: var(--radius);
+      resize: vertical;
+      min-height: 70px;
+      transition: all 0.15s ease;
+    }
+
+    .form-textarea:focus {
+      outline: none;
+      border-color: var(--blue-400);
+      box-shadow: 0 0 0 3px var(--blue-50);
+    }
+
+    /* ========================================
+       ALERT / BANNER
+    ======================================== */
+    .alert {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+    }
+
+    .alert-info {
+      background: var(--blue-50);
+      color: var(--blue-700);
+      border: 1px solid var(--blue-100);
+    }
+
+    .alert-warning {
+      background: var(--amber-50);
+      color: var(--amber-600);
+      border: 1px solid var(--amber-100);
+    }
+
+    .alert-success {
+      background: var(--green-50);
+      color: var(--green-700);
+      border: 1px solid var(--green-100);
+    }
+
+    /* ========================================
+       SCROLLBAR
+    ======================================== */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--slate-300); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--slate-400); }
+
+    /* ========================================
+       TABS
+    ======================================== */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--slate-200);
+      padding: 0 var(--space-5);
+    }
+
+    .tab {
+      padding: var(--space-3) var(--space-4);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--slate-500);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s ease;
+      margin-bottom: -1px;
+    }
+
+    .tab:hover { color: var(--slate-700); }
+    .tab.active { color: var(--blue-600); border-bottom-color: var(--blue-600); }
+
+    /* ========================================
+       CONSENT BANNER
+    ======================================== */
+    .consent-banner {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      background: var(--amber-50);
+      border: 1px solid var(--amber-100);
+      border-radius: var(--radius-md);
+      font-size: var(--text-xs);
+      color: var(--amber-600);
+    }
+
+    .consent-banner input[type="checkbox"] {
+      accent-color: var(--amber-500);
+    }
+
+    /* ========================================
+       EMPTY STATE
+    ======================================== */
+    .empty-state {
+      text-align: center;
+      padding: var(--space-10);
+      color: var(--slate-400);
+    }
+
+    .empty-state-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto var(--space-4);
+      opacity: 0.5;
+    }
+
+    .empty-state-title {
+      font-size: var(--text-base);
+      font-weight: 500;
+      color: var(--slate-600);
+      margin-bottom: var(--space-2);
+    }
+
+    .empty-state-text {
+      font-size: var(--text-sm);
+      color: var(--slate-400);
+    }
+
+    /* ========================================
+       TAG / BADGE
+    ======================================== */
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 0.6875rem;
+      font-weight: 500;
+    }
+
+    .tag-blue { background: var(--blue-100); color: var(--blue-700); }
+    .tag-green { background: var(--green-100); color: var(--green-700); }
+    .tag-amber { background: var(--amber-100); color: var(--amber-600); }
+    .tag-red { background: var(--red-100); color: var(--red-600); }
+
+    /* ========================================
+       RESPONSIVE
+    ======================================== */
+    @media (max-width: 1200px) {
+      .right-panel { width: 280px; }
+    }
+
+    @media (max-width: 1024px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .right-panel { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+          </svg>
+        </div>
+        <div class="sidebar-brand-text">
+          <h1>DentAI</h1>
+          <p>智能诊疗记录</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">工作台</div>
+          <a class="nav-item active" href="#">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+            今日就诊
+            <span class="nav-item-badge">5</span>
+          </a>
+          <a class="nav-item" href="#">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+            历史记录
+          </a>
+          <a class="nav-item" href="#">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            患者管理
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">今日就诊</div>
+          <div class="patient-list">
+            <div class="patient-item active">
+              <div class="patient-avatar">张</div>
+              <div class="patient-info">
+                <div class="patient-name">张明华</div>
+                <div class="patient-meta">09:30 · 根管治疗</div>
+              </div>
+              <div class="patient-status recording"></div>
+            </div>
+            <div class="patient-item">
+              <div class="patient-avatar">李</div>
+              <div class="patient-info">
+                <div class="patient-name">李小红</div>
+                <div class="patient-meta">10:15 · 洁牙</div>
+              </div>
+              <div class="patient-status completed"></div>
+            </div>
+            <div class="patient-item">
+              <div class="patient-avatar">王</div>
+              <div class="patient-info">
+                <div class="patient-name">王建国</div>
+                <div class="patient-meta">11:00 · 种植咨询</div>
+              </div>
+              <div class="patient-status pending"></div>
+            </div>
+            <div class="patient-item">
+              <div class="patient-avatar">赵</div>
+              <div class="patient-info">
+                <div class="patient-name">赵雅文</div>
+                <div class="patient-meta">14:00 · 正畸复查</div>
+              </div>
+            </div>
+            <div class="patient-item">
+              <div class="patient-avatar">陈</div>
+              <div class="patient-info">
+                <div class="patient-name">陈伟</div>
+                <div class="patient-meta">15:30 · 牙周治疗</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">系统</div>
+          <a class="nav-item" href="#">
+            <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68 1.65 1.65 0 0 0 9 3.17V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            设置
+          </a>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="sidebar-user-avatar">李</div>
+          <div class="sidebar-user-info">
+            <div class="sidebar-user-name">李医生</div>
+            <div class="sidebar-user-role">口腔全科</div>
+          </div>
+          <button class="btn-ghost btn-icon" style="color:var(--slate-400);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ===== HEADER ===== -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="header-breadcrumb">
+          今日就诊 / <span>张明华 - 根管治疗</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <span class="tag tag-red">
+          <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+          录音中
+        </span>
+        <button class="btn btn-secondary btn-sm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          保存
+        </button>
+        <button class="btn btn-ghost btn-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="main-content">
+      <!-- Center Panel -->
+      <div class="center-panel">
+
+        <!-- Workflow Steps -->
+        <div class="workflow-steps">
+          <div class="step completed">
+            <div class="step-number">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <span>患者信息</span>
+          </div>
+          <div class="step-connector completed"></div>
+          <div class="step active">
+            <div class="step-number">2</div>
+            <span>录音对话</span>
+          </div>
+          <div class="step-connector"></div>
+          <div class="step">
+            <div class="step-number">3</div>
+            <span>对话记录</span>
+          </div>
+          <div class="step-connector"></div>
+          <div class="step">
+            <div class="step-number">4</div>
+            <span>生成报告</span>
+          </div>
+          <div class="step-connector"></div>
+          <div class="step">
+            <div class="step-number">5</div>
+            <span>审核确认</span>
+          </div>
+        </div>
+
+        <!-- Consent Banner -->
+        <div class="consent-banner">
+          <input type="checkbox" id="consent" checked />
+          <label for="consent" style="cursor:pointer;">患者已知情同意录音及AI辅助整理，符合诊所隐私和数据留存要求</label>
+        </div>
+
+        <!-- Recording Card -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-header-left">
+              <div class="card-icon red">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+              </div>
+              <div>
+                <div class="card-title">对话录音</div>
+                <div class="card-subtitle">录音将自动转写为文字并由AI整理</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:var(--space-2);">
+              <button class="btn btn-sm btn-secondary">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                音频设置
+              </button>
+            </div>
+          </div>
+
+          <div class="recording-hero">
+            <div class="recording-orb is-recording" id="recordingOrb">
+              <svg class="recording-orb-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" x2="12" y1="19" y2="22"/>
+              </svg>
+            </div>
+
+            <div class="waveform-container">
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+              <div class="waveform-bar"></div>
+            </div>
+
+            <div class="recording-timer">03:24</div>
+            <div class="recording-status is-recording">正在录音...</div>
+
+            <div class="recording-controls">
+              <button class="btn btn-secondary btn-icon" title="暂停" style="width:40px;height:40px;border-radius:50%;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+              </button>
+              <button class="btn-record-main is-recording" title="停止录音">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+              </button>
+              <button class="btn btn-success btn-icon" title="转写" disabled style="width:40px;height:40px;border-radius:50%;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </button>
+            </div>
+
+            <div class="recording-hint">录音完成后将自动进行AI转写，医生核对后生成报告</div>
+          </div>
+        </div>
+
+        <!-- Transcript Card (Preview) -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-header-left">
+              <div class="card-icon cyan">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <div>
+                <div class="card-title">对话记录</div>
+                <div class="card-subtitle">实时转写预览</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:var(--space-2);">
+              <button class="btn btn-sm btn-secondary">AI 标注角色</button>
+              <button class="btn btn-sm btn-secondary">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+                新增
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="transcript-timeline">
+              <div class="transcript-msg">
+                <div class="transcript-msg-avatar doctor">医</div>
+                <div class="transcript-msg-content">
+                  <div class="transcript-msg-header">
+                    <span class="transcript-msg-name">李医生</span>
+                    <span class="transcript-msg-time">00:12</span>
+                  </div>
+                  <div class="transcript-msg-text">张先生您好，今天来复诊是之前那颗右下第一磨牙的问题对吧？上次我们说需要做根管治疗。</div>
+                </div>
+              </div>
+              <div class="transcript-msg">
+                <div class="transcript-msg-avatar patient">患</div>
+                <div class="transcript-msg-content">
+                  <div class="transcript-msg-header">
+                    <span class="transcript-msg-name">张明华</span>
+                    <span class="transcript-msg-time">00:28</span>
+                  </div>
+                  <div class="transcript-msg-text">对的李医生，就是右下那颗大牙，这几天还是有点隐隐作痛，特别是吃热的东西的时候。</div>
+                </div>
+              </div>
+              <div class="transcript-msg">
+                <div class="transcript-msg-avatar doctor">医</div>
+                <div class="transcript-msg-content">
+                  <div class="transcript-msg-header">
+                    <span class="transcript-msg-name">李医生</span>
+                    <span class="transcript-msg-time">00:45</span>
+                  </div>
+                  <div class="transcript-msg-text">好的，我先看一下片子。从X光片来看，46牙根尖有明显的暗影，说明炎症已经到了根尖周围。我建议今天开始做根管治疗，大概需要两到三次就诊。</div>
+                </div>
+              </div>
+              <div class="transcript-msg">
+                <div class="transcript-msg-avatar patient">患</div>
+                <div class="transcript-msg-content">
+                  <div class="transcript-msg-header">
+                    <span class="transcript-msg-name">张明华</span>
+                    <span class="transcript-msg-time">01:15</span>
+                  </div>
+                  <div class="transcript-msg-text">好的医生，那治疗过程会很痛吗？需要打麻药吗？</div>
+                </div>
+              </div>
+              <div class="transcript-msg">
+                <div class="transcript-msg-avatar doctor">医</div>
+                <div class="transcript-msg-content">
+                  <div class="transcript-msg-header">
+                    <span class="transcript-msg-name">李医生</span>
+                    <span class="transcript-msg-time">01:25</span>
+                  </div>
+                  <div class="transcript-msg-text">会打局部麻醉的，治疗过程中基本不会有疼痛感。您之前有没有对麻药过敏的情况？</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span style="font-size:var(--text-xs);color:var(--slate-500);">已识别 5 段对话</span>
+            <button class="btn btn-sm btn-ghost">查看全部</button>
+          </div>
+        </div>
+
+        <!-- Report Card -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-header-left">
+              <div class="card-icon blue">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </div>
+              <div>
+                <div class="card-title">诊疗报告</div>
+                <div class="card-subtitle">AI根据对话自动生成结构化报告</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:var(--space-2);">
+              <button class="btn btn-sm btn-primary">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/></svg>
+                生成报告
+              </button>
+              <button class="btn btn-sm btn-secondary">患者说明</button>
+              <button class="btn btn-sm btn-secondary">转诊信</button>
+              <button class="btn btn-sm btn-ghost">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              </button>
+              <button class="btn btn-sm btn-ghost">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="tabs">
+            <div class="tab active">诊疗记录</div>
+            <div class="tab">牙周检查</div>
+            <div class="tab">影像所见</div>
+          </div>
+          <div class="card-body">
+            <textarea class="report-editor-area" placeholder="完成录音转写并通过医生审核后，点击「生成报告」，AI将自动生成结构化诊疗报告。&#10;&#10;报告将包含：&#10;• 主诉与现病史&#10;• 检查所见&#10;• 诊断&#10;• 治疗方案&#10;• 知情同意要点&#10;• 术后医嘱与复诊安排&#10;&#10;所有内容仅供参考，最终需由医生审核确认。"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Panel -->
+      <div class="right-panel">
+        <!-- Patient Info -->
+        <div class="card">
+          <div class="card-body patient-card">
+            <div class="patient-card-avatar">张</div>
+            <div class="patient-card-name">张明华</div>
+            <div class="patient-card-id">P-20260510-001 · 男 · 45岁</div>
+            <div class="patient-card-details">
+              <div class="patient-detail-item">
+                <div class="patient-detail-label">主诉</div>
+                <div class="patient-detail-value">右下后牙痛3天</div>
+              </div>
+              <div class="patient-detail-item">
+                <div class="patient-detail-label">就诊类型</div>
+                <div class="patient-detail-value">根管治疗</div>
+              </div>
+              <div class="patient-detail-item">
+                <div class="patient-detail-label">过敏史</div>
+                <div class="patient-detail-value">无</div>
+              </div>
+              <div class="patient-detail-item">
+                <div class="patient-detail-label">全身病史</div>
+                <div class="patient-detail-value">高血压(控制中)</div>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-sm btn-ghost" style="margin:0 auto;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              编辑患者信息
+            </button>
+          </div>
+        </div>
+
+        <!-- Review Checklist -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-header-left">
+              <div class="card-icon amber">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div>
+                <div class="card-title">审核关口</div>
+                <div class="card-subtitle">完成所有审核后可导出</div>
+              </div>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="review-progress">
+              <div class="review-item checked">
+                <div class="review-checkbox">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <span class="review-item-text">转写文本与说话人已核对</span>
+              </div>
+              <div class="review-item">
+                <div class="review-checkbox"></div>
+                <span class="review-item-text">过敏史、用药史、禁忌证已核对</span>
+              </div>
+              <div class="review-item">
+                <div class="review-checkbox"></div>
+                <span class="review-item-text">诊断与治疗方案已核对</span>
+              </div>
+              <div class="review-item">
+                <div class="review-checkbox"></div>
+                <span class="review-item-text">最终报告已审核，可导出</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-header-left">
+              <div class="card-icon green">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              </div>
+              <div class="card-title">快捷操作</div>
+            </div>
+          </div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:var(--space-2);">
+            <button class="btn btn-secondary" style="width:100%;justify-content:flex-start;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></svg>
+              从对话摘录牙周数据
+            </button>
+            <button class="btn btn-secondary" style="width:100%;justify-content:flex-start;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="9" x2="9" y1="21" y2="9"/></svg>
+              查看影像记录
+            </button>
+            <button class="btn btn-secondary" style="width:100%;justify-content:flex-start;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              生成转诊信
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

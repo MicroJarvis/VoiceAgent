@@ -3,106 +3,157 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>口腔诊疗记录台</title>
+    <title>DentAI 口腔诊疗智能记录</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header class="app-header">
-      <div>
-        <h1>口腔诊疗记录台</h1>
-        <p>医患对话记录、整理与报告草稿</p>
-      </div>
-      <div class="header-actions">
-        <span id="statusText" class="status">就绪</span>
-        <button id="saveCaseBtn" type="button" class="secondary">保存会话</button>
-        <button id="loadCaseBtn" type="button" class="secondary">读取会话</button>
-      </div>
-    </header>
-
-    <main class="workspace">
-      <section class="panel setup-panel">
-        <div class="panel-title">
-          <h2>会话设置</h2>
-        </div>
-        <div class="field-grid">
-          <label>
-            <span>患者姓名</span>
-            <input id="patientName" autocomplete="off" placeholder="张三" />
-          </label>
-          <label>
-            <span>医生姓名</span>
-            <input id="doctorName" autocomplete="off" placeholder="李医生" />
-          </label>
-          <label>
-            <span>就诊日期</span>
-            <input id="visitDate" type="date" />
-          </label>
-          <label>
-            <span>主诉速记</span>
-            <input id="chiefNote" autocomplete="off" placeholder="右下后牙疼痛三天" />
-          </label>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="诊疗导航">
+        <div class="sidebar-brand">
+          <div class="header-logo" aria-hidden="true">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" x2="12" y1="19" y2="22" />
+            </svg>
+          </div>
+          <div class="sidebar-brand-text">
+            <h1>DentAI</h1>
+            <p>口腔诊疗智能记录</p>
+          </div>
         </div>
 
-        <div class="settings-grid">
-          <label class="wide">
-            <span>本地 Whisper 命令</span>
-            <input id="whisperCommand" autocomplete="off" value="whisper" />
-          </label>
-          <label>
-            <span>转写模型</span>
-            <input id="transcriptionModel" autocomplete="off" value="large-v3-turbo" />
-          </label>
-          <label>
-            <span>整理 API Key</span>
-            <input id="apiKey" type="password" autocomplete="off" placeholder="报告整理模型 API Key" />
-          </label>
-          <label>
-            <span>整理 Base URL</span>
-            <input id="baseUrl" autocomplete="off" value="https://api.openai.com/v1" />
-          </label>
-          <label>
-            <span>整理模型</span>
-            <input id="reportModel" autocomplete="off" value="gpt-4o-mini" />
-          </label>
-          <label>
-            <span>接口测试</span>
-            <button id="testResponsesBtn" type="button" class="secondary">测试整理接口</button>
-          </label>
-        </div>
+        <nav class="sidebar-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">工作台</div>
+            <a class="nav-item active" href="#recording">
+              <span class="nav-item-icon" aria-hidden="true">●</span>
+              <span>本次诊疗</span>
+              <span class="nav-item-badge">实时</span>
+            </a>
+            <a class="nav-item" href="#transcript">
+              <span class="nav-item-icon" aria-hidden="true">☰</span>
+              <span>对话记录</span>
+            </a>
+            <a class="nav-item" href="#report">
+              <span class="nav-item-icon" aria-hidden="true">▤</span>
+              <span>报告草稿</span>
+            </a>
+          </div>
 
-        <div class="consent-row">
-          <label class="checkbox-label">
-            <input id="consent" type="checkbox" />
-            <span>已获得患者录音和 AI 辅助整理授权</span>
-          </label>
-          <label class="checkbox-label">
-            <input id="rememberSettings" type="checkbox" />
-            <span>在本机浏览器保存接口设置</span>
-          </label>
-        </div>
-      </section>
+          <div class="nav-section">
+            <div class="nav-section-title">今日患者</div>
+            <div class="patient-list">
+              <div class="patient-item active">
+                <div class="patient-avatar">今</div>
+                <div class="patient-info">
+                  <div class="patient-name">当前接诊</div>
+                  <div class="patient-meta">等待录音</div>
+                </div>
+                <span class="patient-status pending" aria-hidden="true"></span>
+              </div>
+              <div class="patient-item">
+                <div class="patient-avatar">复</div>
+                <div class="patient-info">
+                  <div class="patient-name">复诊记录</div>
+                  <div class="patient-meta">本机保存</div>
+                </div>
+                <span class="patient-status completed" aria-hidden="true"></span>
+              </div>
+            </div>
+          </div>
+        </nav>
 
-      <section class="main-grid">
-        <div class="left-stack">
-          <section class="panel recorder-panel">
+        <div class="sidebar-footer">
+          <div class="sidebar-user">
+            <div class="sidebar-user-avatar">Dr</div>
+            <div class="sidebar-user-info">
+              <div class="sidebar-user-name">本机医生端</div>
+              <div class="sidebar-user-role">Local first</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <header class="app-header">
+        <div class="header-left">
+          <div class="header-breadcrumb">
+            <span>诊疗记录</span>
+            <span aria-hidden="true">/</span>
+            <strong>环境辅助记录</strong>
+          </div>
+        </div>
+        <div class="header-actions">
+          <span id="statusText" class="status">就绪</span>
+          <button id="saveCaseBtn" type="button" class="secondary">保存会话</button>
+          <button id="loadCaseBtn" type="button" class="secondary">读取会话</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="center-panel">
+          <div class="workflow-steps" aria-label="诊疗记录流程">
+            <div class="step completed">
+              <span class="step-number">1</span>
+              <span>确认患者</span>
+            </div>
+            <span class="step-connector completed" aria-hidden="true"></span>
+            <div class="step active">
+              <span class="step-number">2</span>
+              <span>录音记录</span>
+            </div>
+            <span class="step-connector" aria-hidden="true"></span>
+            <div class="step">
+              <span class="step-number">3</span>
+              <span>审核定稿</span>
+            </div>
+          </div>
+
+          <section id="recording" class="panel recorder-panel">
             <div class="panel-title">
-              <h2>录音</h2>
+              <div class="panel-title-left">
+                <span class="panel-icon red" aria-hidden="true">●</span>
+                <div>
+                  <h2>环境录音</h2>
+                  <p>一边沟通，一边生成实时草稿</p>
+                </div>
+              </div>
               <span id="timer" class="timer">00:00</span>
             </div>
-            <div class="controls">
-              <button id="startBtn" type="button">开始</button>
-              <button id="pauseBtn" type="button" class="secondary" disabled>暂停</button>
-              <button id="stopBtn" type="button" class="danger" disabled>结束</button>
-              <button id="transcribeBtn" type="button" disabled>转写录音</button>
+            <div class="recorder-body">
+              <div class="recorder-visual" aria-hidden="true">
+                <div class="recorder-circle">
+                  <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" x2="12" y1="19" y2="22" />
+                  </svg>
+                </div>
+                <div class="waveform">
+                  <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                </div>
+              </div>
+              <div class="controls">
+                <button id="startBtn" type="button" class="primary-action">开始记录</button>
+                <button id="pauseBtn" type="button" class="secondary" disabled>暂停</button>
+                <button id="stopBtn" type="button" class="danger" disabled>结束并整理</button>
+                <button id="transcribeBtn" type="button" class="success" disabled>转写录音</button>
+              </div>
+              <p id="recordingMeta" class="helper-text">录音时会将 sherpa-onnx 实时草稿写入对话记录；结束后自动校对角色并生成报告草稿。</p>
+              <pre id="apiTestResult" class="api-test-result" hidden></pre>
+              <audio id="audioPreview" controls hidden></audio>
             </div>
-            <p id="recordingMeta" class="helper-text">录音完成后会显示文件大小和转写状态</p>
-            <pre id="apiTestResult" class="api-test-result" hidden></pre>
-            <audio id="audioPreview" controls hidden></audio>
           </section>
 
-          <section class="panel transcript-panel">
+          <section id="transcript" class="panel transcript-panel">
             <div class="panel-title">
-              <h2>对话记录</h2>
+              <div class="panel-title-left">
+                <span class="panel-icon cyan" aria-hidden="true">☰</span>
+                <div>
+                  <h2>实时对话记录</h2>
+                  <p>先快速扫读，再细修牙位、左右侧和说话人</p>
+                </div>
+              </div>
               <div class="title-actions">
                 <button id="addSegmentBtn" type="button" class="secondary">新增一句</button>
                 <button id="segmentBtn" type="button" class="secondary">AI 标注角色</button>
@@ -115,26 +166,247 @@
                 <option value="patient">患者</option>
                 <option value="unknown">待确认</option>
               </select>
-              <textarea id="manualText" rows="2" placeholder="手动补充或粘贴一句对话"></textarea>
+              <textarea id="manualText" rows="2" placeholder="手动补充一句对话，或粘贴遗漏内容"></textarea>
             </div>
 
             <div id="segments" class="segments"></div>
           </section>
-        </div>
 
-        <section class="panel report-panel">
-          <div class="panel-title">
-            <h2>报告草稿</h2>
-            <div class="title-actions">
-              <button id="generateReportBtn" type="button">生成报告</button>
-              <button id="copyReportBtn" type="button" class="secondary">复制</button>
-              <button id="printBtn" type="button" class="secondary">打印</button>
+          <section id="report" class="panel report-panel">
+            <div class="panel-title">
+              <div class="panel-title-left">
+                <span class="panel-icon blue" aria-hidden="true">▤</span>
+                <div>
+                  <h2>报告草稿</h2>
+                  <p>医生复核后才能复制、打印或派生文书</p>
+                </div>
+              </div>
+              <div class="title-actions">
+                <button id="generateReportBtn" type="button">生成报告</button>
+                <button id="patientSummaryBtn" type="button" class="secondary">患者说明</button>
+                <button id="referralLetterBtn" type="button" class="secondary">转诊信</button>
+                <button id="copyReportBtn" type="button" class="ghost" title="复制">复制</button>
+                <button id="printBtn" type="button" class="ghost" title="打印">打印</button>
+              </div>
             </div>
-          </div>
-          <textarea id="reportEditor" class="report-editor" placeholder="报告会在录音结束后自动生成，也可以手动点击“生成报告”。"></textarea>
+            <div id="riskPanel" class="risk-panel" hidden></div>
+            <textarea id="reportEditor" class="report-editor" placeholder="录音结束后会自动生成报告草稿；也可以在医生核对后手动点击「生成报告」。&#10;&#10;报告内容仅供参考，最终诊断和治疗方案需由医生确认。"></textarea>
+            <div id="evidencePanel" class="evidence-panel" hidden></div>
+            <div id="auditPanel" class="audit-panel" hidden></div>
+          </section>
         </section>
-      </section>
-    </main>
+
+        <aside class="context-panel" aria-label="患者上下文与审核">
+          <section class="panel patient-card">
+            <div class="panel-title">
+              <div class="panel-title-left">
+                <span class="panel-icon blue" aria-hidden="true">人</span>
+                <div>
+                  <h2>患者与授权</h2>
+                  <p>接诊前只确认必要信息</p>
+                </div>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div class="field-grid compact">
+                <label class="field-group">
+                  <span>患者姓名</span>
+                  <input id="patientName" autocomplete="off" placeholder="张三" />
+                </label>
+                <label class="field-group">
+                  <span>患者编号</span>
+                  <input id="patientId" autocomplete="off" placeholder="P-20260510-001" />
+                </label>
+                <label class="field-group">
+                  <span>医生姓名</span>
+                  <input id="doctorName" autocomplete="off" placeholder="李医生" />
+                </label>
+                <label class="field-group">
+                  <span>就诊日期</span>
+                  <input id="visitDate" type="date" />
+                </label>
+                <label class="field-group wide">
+                  <span>主诉速记</span>
+                  <input id="chiefNote" autocomplete="off" placeholder="右下后牙疼痛三天" />
+                </label>
+              </div>
+
+              <div class="consent-row">
+                <label class="checkbox-label">
+                  <input id="consent" type="checkbox" />
+                  <span>患者已知情同意录音、AI 辅助整理和必要的远程模型处理</span>
+                </label>
+                <label class="checkbox-label">
+                  <input id="privacyConfirmed" type="checkbox" />
+                  <span>已核对本次使用符合诊所隐私和数据留存要求</span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel safety-panel">
+            <div class="panel-title">
+              <div class="panel-title-left">
+                <span class="panel-icon orange" aria-hidden="true">✓</span>
+                <div>
+                  <h2>医生审核关口</h2>
+                  <p>按顺序勾选，降低遗漏风险</p>
+                </div>
+              </div>
+            </div>
+            <div class="review-checklist">
+              <label class="review-item">
+                <input id="transcriptReviewed" type="checkbox" />
+                <span>转写文本、说话人和牙位/左右侧已核对</span>
+              </label>
+              <label class="review-item">
+                <input id="historyReviewed" type="checkbox" />
+                <span>过敏史、用药史、全身病史和禁忌证已核对</span>
+              </label>
+              <label class="review-item">
+                <input id="planReviewed" type="checkbox" />
+                <span>诊断、治疗方案、风险替代方案和复诊医嘱已核对</span>
+              </label>
+              <label class="review-item">
+                <input id="finalReviewed" type="checkbox" />
+                <span>最终报告已由医生审核，可复制或打印</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="panel clinical-panel">
+            <div class="panel-title">
+              <div class="panel-title-left">
+                <span class="panel-icon green" aria-hidden="true">病</span>
+                <div>
+                  <h2>临床信息</h2>
+                  <p>无特殊也建议写“无”</p>
+                </div>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div class="clinical-grid">
+                <label class="field-group">
+                  <span>全身病史</span>
+                  <textarea id="medicalHistory" rows="2" placeholder="高血压、糖尿病、心脏病、妊娠等；无特殊请写无"></textarea>
+                </label>
+                <label class="field-group">
+                  <span>过敏史</span>
+                  <textarea id="allergies" rows="2" placeholder="药物/麻药/材料过敏；无请写无"></textarea>
+                </label>
+                <label class="field-group">
+                  <span>用药史</span>
+                  <textarea id="medications" rows="2" placeholder="抗凝药、降糖药、双膦酸盐等；无请写无"></textarea>
+                </label>
+                <label class="field-group">
+                  <span>牙科既往史</span>
+                  <textarea id="dentalHistory" rows="2" placeholder="根管、拔牙、种植、正畸、牙周治疗等"></textarea>
+                </label>
+                <label class="field-group">
+                  <span>检查所见</span>
+                  <textarea id="examFindings" rows="2" placeholder="牙位、牙面、叩诊、松动度、牙周、黏膜等"></textarea>
+                </label>
+                <label class="field-group">
+                  <span>影像/附件</span>
+                  <textarea id="imagingFindings" rows="2" placeholder="片名、日期、关键所见；未拍片请写未拍"></textarea>
+                </label>
+                <label class="field-group">
+                  <span>诊断/问题清单</span>
+                  <textarea id="diagnoses" rows="2" placeholder="待确诊也应标注待进一步检查"></textarea>
+                </label>
+                <label class="field-group">
+                  <span>知情同意要点</span>
+                  <textarea id="treatmentConsent" rows="2" placeholder="风险、替代方案、费用/疗程、患者选择"></textarea>
+                </label>
+                <label class="field-group">
+                  <span>术后医嘱/复诊</span>
+                  <textarea id="followUp" rows="2" placeholder="用药、注意事项、复诊时间、警示症状"></textarea>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel perio-panel">
+            <div class="panel-title">
+              <div class="panel-title-left">
+                <span class="panel-icon green" aria-hidden="true">□</span>
+                <div>
+                  <h2>牙周/检查摘录</h2>
+                  <p>从对话里快速抽取检查指标</p>
+                </div>
+              </div>
+              <div class="title-actions">
+                <button id="extractPerioBtn" type="button" class="secondary">从对话摘录</button>
+              </div>
+            </div>
+            <div class="panel-body">
+              <textarea id="perioChart" class="compact-editor" rows="7" placeholder="例：16 近中 4mm BOP+；全口探诊深度 2-3mm；松动度 I 度。"></textarea>
+            </div>
+          </section>
+
+          <section class="panel setup-panel collapsed">
+            <div class="panel-title">
+              <div class="panel-title-left">
+                <span class="panel-icon cyan" aria-hidden="true">⚙</span>
+                <div>
+                  <h2>接口设置</h2>
+                  <p>日常使用时可收起</p>
+                </div>
+              </div>
+              <button class="collapse-toggle secondary" type="button" aria-expanded="false" aria-controls="setupBody">展开设置</button>
+            </div>
+
+            <div id="setupBody" class="panel-body">
+              <div class="settings-grid">
+                <label class="field-group wide">
+                  <span>本地 Whisper 命令</span>
+                  <input id="whisperCommand" autocomplete="off" value="whisper" />
+                </label>
+                <label class="field-group">
+                  <span>转写模型</span>
+                  <input id="transcriptionModel" autocomplete="off" value="large-v3-turbo" />
+                </label>
+                <label class="field-group">
+                  <span>Sherpa 实时 WS</span>
+                  <input id="sherpaWsUrl" autocomplete="off" value="ws://localhost:6006" />
+                </label>
+                <label class="field-group">
+                  <span>整理 API Key</span>
+                  <input id="apiKey" type="password" autocomplete="off" placeholder="报告整理模型 API Key" />
+                </label>
+                <label class="field-group">
+                  <span>整理 Base URL</span>
+                  <input id="baseUrl" autocomplete="off" value="https://api.openai.com/v1" />
+                </label>
+                <label class="field-group">
+                  <span>整理模型</span>
+                  <input id="reportModel" autocomplete="off" value="gpt-4o-mini" />
+                </label>
+                <label class="field-group field-action">
+                  <span>接口测试</span>
+                  <button id="testResponsesBtn" type="button" class="secondary">测试整理接口</button>
+                </label>
+                <label class="field-group field-action">
+                  <span>实时转写</span>
+                  <button id="testSherpaBtn" type="button" class="secondary">测试实时连接</button>
+                </label>
+              </div>
+
+              <div class="consent-row">
+                <label class="checkbox-label">
+                  <input id="streamingEnabled" type="checkbox" checked />
+                  <span>启用 sherpa-onnx 实时草稿（需要先启动 WebSocket 服务）</span>
+                </label>
+                <label class="checkbox-label">
+                  <input id="rememberSettings" type="checkbox" />
+                  <span>在本机浏览器保存接口设置（不保存 API Key）</span>
+                </label>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </main>
+    </div>
 
     <template id="segmentTemplate">
       <article class="segment">
@@ -144,7 +416,7 @@
           <option value="unknown">待确认</option>
         </select>
         <textarea class="segment-text" rows="2"></textarea>
-        <button class="icon-button segment-delete" type="button" title="删除">删除</button>
+        <button class="ghost icon-button segment-delete" type="button" title="删除">删除</button>
       </article>
     </template>
 

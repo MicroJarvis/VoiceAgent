@@ -6,26 +6,64 @@ const state = {
   recordingStartedAt: 0,
   elapsedBeforePause: 0,
   timerId: null,
+  mediaStream: null,
+  audioContext: null,
+  audioSource: null,
+  audioProcessor: null,
+  audioSink: null,
+  sherpaSocket: null,
+  sherpaConnected: false,
+  sherpaFinalizing: false,
+  sherpaSessionId: 0,
+  sherpaBaseTranscript: "",
+  sherpaTranscript: "",
+  sherpaSegments: [],
+  sherpaStartedAt: 0,
+  sherpaChunksSent: 0,
+  sherpaMessagesReceived: 0,
+  sherpaLastRawMessage: "",
+  finalizingRecording: false,
   segments: [],
+  clinicalAlerts: [],
+  evidence: [],
+  auditLog: [],
   report: null,
-  reportText: ""
+  reportText: "",
+  lastTranscribedAt: "",
+  lastGeneratedAt: ""
 };
+
+const sherpaTargetSampleRate = 16000;
 
 const els = {
   statusText: document.querySelector("#statusText"),
   saveCaseBtn: document.querySelector("#saveCaseBtn"),
   loadCaseBtn: document.querySelector("#loadCaseBtn"),
   patientName: document.querySelector("#patientName"),
+  patientId: document.querySelector("#patientId"),
   doctorName: document.querySelector("#doctorName"),
   visitDate: document.querySelector("#visitDate"),
   chiefNote: document.querySelector("#chiefNote"),
+  medicalHistory: document.querySelector("#medicalHistory"),
+  allergies: document.querySelector("#allergies"),
+  medications: document.querySelector("#medications"),
+  dentalHistory: document.querySelector("#dentalHistory"),
+  examFindings: document.querySelector("#examFindings"),
+  imagingFindings: document.querySelector("#imagingFindings"),
+  diagnoses: document.querySelector("#diagnoses"),
+  treatmentConsent: document.querySelector("#treatmentConsent"),
+  followUp: document.querySelector("#followUp"),
   apiKey: document.querySelector("#apiKey"),
   baseUrl: document.querySelector("#baseUrl"),
   whisperCommand: document.querySelector("#whisperCommand"),
   transcriptionModel: document.querySelector("#transcriptionModel"),
+  sherpaWsUrl: document.querySelector("#sherpaWsUrl"),
   reportModel: document.querySelector("#reportModel"),
   testResponsesBtn: document.querySelector("#testResponsesBtn"),
+  testSherpaBtn: document.querySelector("#testSherpaBtn"),
   consent: document.querySelector("#consent"),
+  privacyConfirmed: document.querySelector("#privacyConfirmed"),
+  streamingEnabled: document.querySelector("#streamingEnabled"),
   rememberSettings: document.querySelector("#rememberSettings"),
   timer: document.querySelector("#timer"),
   startBtn: document.querySelector("#startBtn"),
@@ -41,11 +79,49 @@ const els = {
   segmentBtn: document.querySelector("#segmentBtn"),
   segments: document.querySelector("#segments"),
   segmentTemplate: document.querySelector("#segmentTemplate"),
+  extractPerioBtn: document.querySelector("#extractPerioBtn"),
+  perioChart: document.querySelector("#perioChart"),
   generateReportBtn: document.querySelector("#generateReportBtn"),
+  patientSummaryBtn: document.querySelector("#patientSummaryBtn"),
+  referralLetterBtn: document.querySelector("#referralLetterBtn"),
   copyReportBtn: document.querySelector("#copyReportBtn"),
   printBtn: document.querySelector("#printBtn"),
-  reportEditor: document.querySelector("#reportEditor")
+  transcriptReviewed: document.querySelector("#transcriptReviewed"),
+  historyReviewed: document.querySelector("#historyReviewed"),
+  planReviewed: document.querySelector("#planReviewed"),
+  finalReviewed: document.querySelector("#finalReviewed"),
+  riskPanel: document.querySelector("#riskPanel"),
+  reportEditor: document.querySelector("#reportEditor"),
+  evidencePanel: document.querySelector("#evidencePanel"),
+  auditPanel: document.querySelector("#auditPanel"),
+  setupPanel: document.querySelector(".setup-panel"),
+  collapseToggle: document.querySelector(".collapse-toggle")
 };
+
+const clinicalInputs = [
+  "patientName",
+  "patientId",
+  "doctorName",
+  "visitDate",
+  "chiefNote",
+  "medicalHistory",
+  "allergies",
+  "medications",
+  "dentalHistory",
+  "examFindings",
+  "imagingFindings",
+  "diagnoses",
+  "treatmentConsent",
+  "followUp",
+  "perioChart"
+];
+
+const reviewInputs = [
+  "transcriptReviewed",
+  "historyReviewed",
+  "planReviewed",
+  "finalReviewed"
+];
 
 init();
 
@@ -54,33 +130,76 @@ function init() {
   loadSettings();
   bindEvents();
   renderSegments();
+  renderClinicalAlerts();
+  renderEvidence();
+  renderAuditLog();
+  updateActionStates();
 }
 
 function bindEvents() {
+  els.collapseToggle.addEventListener("click", toggleSetupPanel);
   els.startBtn.addEventListener("click", startRecording);
   els.pauseBtn.addEventListener("click", togglePause);
   els.stopBtn.addEventListener("click", stopRecording);
   els.transcribeBtn.addEventListener("click", transcribeRecording);
   els.addSegmentBtn.addEventListener("click", addManualSegment);
   els.segmentBtn.addEventListener("click", aiSegmentTranscript);
+  els.extractPerioBtn.addEventListener("click", extractPerioChart);
   els.generateReportBtn.addEventListener("click", generateReport);
+  els.patientSummaryBtn.addEventListener("click", () => buildDocumentDraft("patient"));
+  els.referralLetterBtn.addEventListener("click", () => buildDocumentDraft("referral"));
   els.testResponsesBtn.addEventListener("click", testResponsesEndpoint);
+  els.testSherpaBtn.addEventListener("click", testSherpaConnection);
   els.copyReportBtn.addEventListener("click", copyReport);
-  els.printBtn.addEventListener("click", () => window.print());
+  els.printBtn.addEventListener("click", printReport);
   els.saveCaseBtn.addEventListener("click", saveCase);
   els.loadCaseBtn.addEventListener("click", loadCase);
   els.reportEditor.addEventListener("input", () => {
     state.reportText = els.reportEditor.value;
+    els.finalReviewed.checked = false;
+    updateActionStates();
   });
   els.rememberSettings.addEventListener("change", saveSettings);
-  [els.whisperCommand, els.apiKey, els.baseUrl, els.transcriptionModel, els.reportModel].forEach((input) => {
+  [els.whisperCommand, els.sherpaWsUrl, els.baseUrl, els.transcriptionModel, els.reportModel].forEach((input) => {
     input.addEventListener("change", saveSettings);
   });
+  els.apiKey.addEventListener("change", () => {
+    if (els.rememberSettings.checked) {
+      setStatus("API Key 不会保存到本机浏览器", "busy");
+    }
+  });
+  [els.consent, els.privacyConfirmed, els.streamingEnabled].forEach((input) => {
+    input.addEventListener("change", updateActionStates);
+  });
+  els.streamingEnabled.addEventListener("change", saveSettings);
+  clinicalInputs.forEach((key) => {
+    els[key].addEventListener("input", () => {
+      invalidateReview(["historyReviewed", "planReviewed", "finalReviewed"]);
+      renderClinicalAlerts();
+    });
+  });
+  reviewInputs.forEach((key) => {
+    els[key].addEventListener("change", () => {
+      addAuditEvent(`审核更新：${reviewLabel(key)}=${els[key].checked ? "是" : "否"}`);
+      updateActionStates();
+    });
+  });
+}
+
+function toggleSetupPanel() {
+  const collapsed = els.setupPanel.classList.toggle("collapsed");
+  els.collapseToggle.textContent = collapsed ? "展开设置" : "收起设置";
+  els.collapseToggle.setAttribute("aria-expanded", String(!collapsed));
 }
 
 async function startRecording() {
   if (!els.consent.checked) {
-    setStatus("请先确认授权", "error");
+    setStatus("请先确认录音授权", "error");
+    return;
+  }
+
+  if (!els.privacyConfirmed.checked) {
+    setStatus("请先确认隐私要求", "error");
     return;
   }
 
@@ -95,6 +214,8 @@ async function startRecording() {
     state.chunks = [];
     state.audioBlob = null;
     state.audioMimeType = mimeType || "audio/webm";
+    state.mediaStream = stream;
+    resetSherpaState();
     state.mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
 
     state.mediaRecorder.addEventListener("dataavailable", (event) => {
@@ -105,23 +226,35 @@ async function startRecording() {
 
     state.mediaRecorder.addEventListener("stop", () => {
       stream.getTracks().forEach((track) => track.stop());
+      state.mediaStream = null;
       state.audioBlob = new Blob(state.chunks, { type: state.audioMimeType });
       els.audioPreview.src = URL.createObjectURL(state.audioBlob);
       els.audioPreview.hidden = false;
       els.transcribeBtn.disabled = false;
-      setRecorderNote(`录音已生成，大小 ${formatBytes(state.audioBlob.size)}，可以开始转写。`);
-      runAutomaticWorkflow();
+      setRecorderNote(`录音已生成，大小 ${formatBytes(state.audioBlob.size)}，正在做最终转写、校对并生成报告草稿。`, "busy");
+      setReportPlaceholder("录音已完成。正在最终转写、AI 校对并生成报告草稿...");
+      updateActionStates();
+      finalizeRecordingWorkflow();
     });
 
     state.mediaRecorder.start(1000);
     state.recordingStartedAt = Date.now();
     state.elapsedBeforePause = 0;
     startTimer();
+    startSherpaStreaming(stream);
     els.startBtn.disabled = true;
     els.pauseBtn.disabled = false;
     els.stopBtn.disabled = false;
     els.transcribeBtn.disabled = true;
-    setStatus("录音中", "busy");
+    invalidateReview();
+    addAuditEvent("开始录音");
+    setStatus(els.streamingEnabled.checked ? "录音中，实时转写" : "录音中", "busy");
+    setRecorderNote(
+      els.streamingEnabled.checked
+        ? "正在连接 sherpa-onnx 实时转写；结束后会用实时稿校对并生成报告草稿。"
+        : "实时转写未启用；结束后将回退到本地 Whisper 完整转写。",
+      "busy"
+    );
   } catch (error) {
     setStatus(error.message || "无法开始录音", "error");
   }
@@ -134,6 +267,7 @@ function togglePause() {
     state.mediaRecorder.pause();
     state.elapsedBeforePause += Date.now() - state.recordingStartedAt;
     clearInterval(state.timerId);
+    stopSherpaStreaming({ finish: true, commitTranscript: true });
     els.pauseBtn.textContent = "继续";
     setStatus("已暂停");
     return;
@@ -143,8 +277,11 @@ function togglePause() {
     state.mediaRecorder.resume();
     state.recordingStartedAt = Date.now();
     startTimer();
+    if (els.streamingEnabled.checked) {
+      startSherpaStreaming(state.mediaStream);
+    }
     els.pauseBtn.textContent = "暂停";
-    setStatus("录音中", "busy");
+    setStatus(els.streamingEnabled.checked ? "录音中，实时转写" : "录音中", "busy");
   }
 }
 
@@ -153,6 +290,7 @@ function stopRecording() {
   if (state.mediaRecorder.state === "recording") {
     state.elapsedBeforePause += Date.now() - state.recordingStartedAt;
   }
+  stopSherpaStreaming({ finish: true });
   state.mediaRecorder.stop();
   clearInterval(state.timerId);
   els.startBtn.disabled = false;
@@ -161,9 +299,105 @@ function stopRecording() {
   els.pauseBtn.textContent = "暂停";
   setTimer(state.elapsedBeforePause);
   setStatus("录音完成");
+  addAuditEvent("结束录音");
+  updateActionStates();
 }
 
-async function transcribeRecording() {
+function resetSherpaState() {
+  state.audioContext = null;
+  state.audioSource = null;
+  state.audioProcessor = null;
+  state.audioSink = null;
+  state.sherpaSocket = null;
+  state.sherpaConnected = false;
+  state.sherpaFinalizing = false;
+  state.sherpaSessionId += 1;
+  state.sherpaBaseTranscript = "";
+  state.sherpaTranscript = "";
+  state.sherpaSegments = [];
+  state.sherpaStartedAt = 0;
+  state.sherpaChunksSent = 0;
+  state.sherpaMessagesReceived = 0;
+  state.sherpaLastRawMessage = "";
+}
+
+async function startSherpaStreaming(stream) {
+  stopSherpaStreaming();
+  if (!els.streamingEnabled.checked) return;
+
+  if (!stream) {
+    setRecorderNote("无法读取麦克风音频流，实时草稿已暂停。", "error");
+    return;
+  }
+
+  const wsUrl = els.sherpaWsUrl.value.trim();
+  if (!wsUrl) {
+    setRecorderNote("未填写 sherpa WebSocket 地址，已回退到结束后本地转写。", "busy");
+    return;
+  }
+
+  try {
+    state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (state.audioContext.state === "suspended") {
+      await state.audioContext.resume();
+    }
+    state.sherpaSessionId += 1;
+    state.sherpaFinalizing = false;
+    state.sherpaSocket = createSherpaSocket(wsUrl);
+    state.audioSource = state.audioContext.createMediaStreamSource(stream);
+    state.audioProcessor = createAudioWorkletNode(state.audioContext);
+    state.audioSink = state.audioContext.createGain();
+    state.audioSink.gain.value = 0;
+    state.audioSource.connect(state.audioProcessor);
+    state.audioProcessor.connect(state.audioSink);
+    state.audioSink.connect(state.audioContext.destination);
+    state.sherpaStartedAt = Date.now();
+    addAuditEvent(`连接 sherpa 实时转写：${wsUrl}`);
+    setRecorderNote(`正在连接 sherpa-onnx：${wsUrl}`, "busy");
+  } catch (error) {
+    setRecorderNote(`sherpa 实时转写连接失败，已回退到结束后本地转写：${error.message}`, "error");
+    stopSherpaStreaming();
+  }
+}
+
+function stopSherpaStreaming(options = {}) {
+  const socket = state.sherpaSocket;
+  if (options.commitTranscript) {
+    state.sherpaBaseTranscript = state.sherpaTranscript;
+  }
+  if (options.finish && socket && socket.readyState === WebSocket.OPEN) {
+    try {
+      state.sherpaFinalizing = true;
+      socket.sherpaFinalizing = true;
+      socket.send("Done");
+    } catch {}
+  }
+  try {
+    state.audioProcessor?.disconnect();
+  } catch {}
+  try {
+    state.audioSource?.disconnect();
+  } catch {}
+  try {
+    state.audioSink?.disconnect();
+  } catch {}
+  if (socket && (!options.finish || socket.readyState === WebSocket.CONNECTING)) {
+    try {
+      socket.close();
+    } catch {}
+  }
+  try {
+    state.audioContext?.close();
+  } catch {}
+  state.audioContext = null;
+  state.audioSource = null;
+  state.audioProcessor = null;
+  state.audioSink = null;
+  state.sherpaSocket = null;
+  state.sherpaConnected = false;
+}
+
+async function transcribeRecording(options = {}) {
   if (!state.audioBlob) {
     setStatus("没有录音文件", "error");
     setRecorderNote("没有可转写的录音，请先完成录音。", "error");
@@ -181,51 +415,301 @@ async function transcribeRecording() {
 
   try {
     els.transcribeBtn.disabled = true;
-    setStatus("准备音频", "busy");
+    setStatus(options.final ? "最终转写中" : "准备音频", "busy");
     setRecorderNote(`正在准备 ${formatBytes(state.audioBlob.size)} 的录音文件...`, "busy");
-    const audioBase64 = await blobToBase64(state.audioBlob);
-    setStatus("上传转写中", "busy");
-    setRecorderNote("录音已准备完成，正在本机运行 Whisper 转写。首次运行可能会下载/加载模型，耗时更久。", "busy");
-    const result = await postJson("/api/transcribe", {
-      settings,
-      audioBase64,
-      mimeType: state.audioMimeType,
-      fileName: fileNameForMime(state.audioMimeType),
-      prompt: "口腔门诊医患对话，包含牙位、疼痛、龋齿、牙周、根管、拔牙、种植、正畸、过敏史、用药史等术语。"
-    });
-
-    if (Array.isArray(result.segments) && result.segments.length) {
-      state.segments = result.segments;
-    } else if (result.text) {
-      state.segments = [{
-        id: createId(),
-        speaker: "unknown",
-        text: result.text,
-        start: "",
-        end: ""
-      }];
-    }
+    const result = await transcribeBlob(state.audioBlob, settings, "final");
+    state.segments = mergeFinalAndSherpaSegments(segmentsFromTranscriptionResult(result));
+    state.lastTranscribedAt = new Date().toISOString();
+    invalidateReview(["transcriptReviewed", "finalReviewed"]);
     renderSegments();
+    renderClinicalAlerts();
+    addAuditEvent(`完成本地转写：${state.segments.length} 条片段`);
     setStatus("转写完成");
-    setRecorderNote(`转写完成，共生成 ${state.segments.length} 条初始文本片段。`);
+    setRecorderNote(`转写完成，共生成 ${state.segments.length} 条初始文本片段。请核对文本、说话人和牙位后勾选医生审核关口。`);
+    updateActionStates();
     return true;
   } catch (error) {
+    if (options.final && state.sherpaSegments.length) {
+      state.segments = state.sherpaSegments.map((segment) => ({ ...segment }));
+      state.lastTranscribedAt = new Date().toISOString();
+      invalidateReview(["transcriptReviewed", "finalReviewed"]);
+      renderSegments();
+      renderClinicalAlerts();
+      addAuditEvent("本地 Whisper 最终转写失败，保留 sherpa 实时草稿");
+      setStatus("已保留实时草稿", "error");
+      setRecorderNote(`最终 Whisper 转写失败，已保留实时草稿，请修正设置后可手动重试：${error.message}`, "error");
+      updateActionStates();
+      return true;
+    }
     setStatus(error.message, "error");
     setRecorderNote(error.message, "error");
     return false;
   } finally {
     els.transcribeBtn.disabled = false;
+    updateActionStates();
   }
 }
 
-async function runAutomaticWorkflow() {
-  setReportPlaceholder("录音结束，正在自动转写并生成报告...");
-  const transcribed = await transcribeRecording();
-  if (!transcribed) return;
-  await generateReport({ automatic: true });
+async function transcribeBlob(blob, settings, label) {
+  setStatus(label === "final" ? "本机最终转写中" : "本机滚动转写中", "busy");
+  const audioBase64 = await blobToBase64(blob);
+  return postJson("/api/transcribe", {
+    settings,
+    audioBase64,
+    mimeType: state.audioMimeType,
+    fileName: fileNameForMime(state.audioMimeType, label),
+    prompt: "口腔门诊医患对话，包含牙位、疼痛、龋齿、牙周、根管、拔牙、种植、正畸、过敏史、用药史等术语。"
+  });
 }
 
-async function aiSegmentTranscript() {
+function segmentsFromTranscriptionResult(result) {
+  if (Array.isArray(result.segments) && result.segments.length) {
+    return result.segments;
+  }
+  if (result.text) {
+    return [{
+      id: createId(),
+      speaker: "unknown",
+      text: result.text,
+      start: "",
+      end: ""
+    }];
+  }
+  return [];
+}
+
+function mergeFinalAndSherpaSegments(finalSegments) {
+  const normalizedFinal = normalizeSegments(finalSegments);
+  if (normalizedFinal.length) {
+    return normalizedFinal;
+  }
+  return state.sherpaSegments.map((segment) => ({ ...segment }));
+}
+
+function normalizeSegments(segments) {
+  return (Array.isArray(segments) ? segments : [])
+    .map((segment) => ({
+      id: segment.id || createId(),
+      speaker: segment.speaker || "unknown",
+      text: String(segment.text || "").trim(),
+      start: Number.isFinite(segment.start) ? segment.start : segment.start || "",
+      end: Number.isFinite(segment.end) ? segment.end : segment.end || ""
+    }))
+    .filter((segment) => segment.text);
+}
+
+function createSherpaSocket(wsUrl) {
+  const socket = new WebSocket(wsUrl);
+  socket.binaryType = "arraybuffer";
+  socket.sherpaSessionId = state.sherpaSessionId;
+  socket.sherpaFinalizing = false;
+
+  socket.addEventListener("open", () => {
+    if (socket.sherpaSessionId !== state.sherpaSessionId) return;
+    state.sherpaConnected = true;
+    setStatus("录音中，实时转写已连接", "busy");
+    setRecorderNote(`sherpa-onnx 已连接，正在发送 16kHz 音频流。若下方仍无文字，请确认模型服务正在返回识别结果。`, "busy");
+  });
+
+  socket.addEventListener("message", (event) => {
+    if (socket.sherpaSessionId !== state.sherpaSessionId) return;
+    handleSherpaMessage(event.data);
+  });
+
+  socket.addEventListener("error", () => {
+    if (socket.sherpaSessionId !== state.sherpaSessionId) return;
+    if (state.sherpaStartedAt) {
+      setRecorderNote(`sherpa 实时转写连接异常：请确认 ${els.sherpaWsUrl.value.trim()} 正在监听。录音仍会保存，结束后将使用本地 Whisper。`, "error");
+    }
+  });
+
+  socket.addEventListener("close", () => {
+    if (socket.sherpaSessionId !== state.sherpaSessionId) return;
+    state.sherpaConnected = false;
+    if (socket.sherpaFinalizing || state.sherpaFinalizing) {
+      state.sherpaFinalizing = false;
+      return;
+    }
+    if (state.mediaRecorder?.state === "recording") {
+      setRecorderNote(`sherpa 实时转写已断开。已发送 ${state.sherpaChunksSent} 个音频块，收到 ${state.sherpaMessagesReceived} 条消息。`, "error");
+    }
+  });
+
+  return socket;
+}
+
+function createAudioWorkletNode(audioContext) {
+  const processor = audioContext.createScriptProcessor(4096, 1, 1);
+  let carry = new Float32Array(0);
+
+  processor.onaudioprocess = (event) => {
+    const socket = state.sherpaSocket;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    const input = event.inputBuffer.getChannelData(0);
+    const resampled = downsampleFloat32(input, audioContext.sampleRate, sherpaTargetSampleRate);
+    if (!resampled.length) return;
+
+    const combined = new Float32Array(carry.length + resampled.length);
+    combined.set(carry);
+    combined.set(resampled, carry.length);
+
+    const chunkSize = 1600;
+    let offset = 0;
+    while (offset + chunkSize <= combined.length) {
+      socket.send(combined.slice(offset, offset + chunkSize).buffer);
+      state.sherpaChunksSent += 1;
+      offset += chunkSize;
+    }
+    carry = combined.slice(offset);
+  };
+
+  return processor;
+}
+
+function downsampleFloat32(input, inputRate, outputRate) {
+  if (!input.length) return new Float32Array(0);
+  if (!Number.isFinite(inputRate) || inputRate <= 0 || inputRate === outputRate) {
+    return new Float32Array(input);
+  }
+  const ratio = inputRate / outputRate;
+  const outputLength = Math.floor(input.length / ratio);
+  const output = new Float32Array(outputLength);
+  for (let i = 0; i < outputLength; i += 1) {
+    const start = Math.floor(i * ratio);
+    const end = Math.min(Math.floor((i + 1) * ratio), input.length);
+    let sum = 0;
+    let count = 0;
+    for (let j = start; j < end; j += 1) {
+      sum += input[j];
+      count += 1;
+    }
+    output[i] = count ? sum / count : input[start] || 0;
+  }
+  return output;
+}
+
+function handleSherpaMessage(data) {
+  state.sherpaMessagesReceived += 1;
+  state.sherpaLastRawMessage = stringifySherpaMessage(data);
+  const payload = parseSherpaPayload(data);
+  if (!payload) return;
+  if (payload.done) {
+    state.sherpaFinalizing = false;
+    return;
+  }
+
+  const text = normalizeSherpaText(payload.text);
+  if (!text) {
+    setRecorderNote(`已收到 sherpa 消息，但没有解析到文本字段。最近消息：${state.sherpaLastRawMessage}`, "busy");
+    return;
+  }
+
+  state.sherpaTranscript = joinSherpaText(state.sherpaBaseTranscript, text);
+  const segment = {
+    id: "sherpa-live",
+    speaker: "unknown",
+    text: state.sherpaTranscript,
+    start: "",
+    end: ""
+  };
+  state.sherpaSegments = [segment];
+  state.segments = [segment];
+  invalidateReview(["transcriptReviewed", "finalReviewed"]);
+  renderSegments();
+  renderClinicalAlerts();
+  updateActionStates();
+  setRecorderNote(`实时草稿已更新：已发送 ${state.sherpaChunksSent} 个音频块，收到 ${state.sherpaMessagesReceived} 条识别消息。`, "busy");
+}
+
+function parseSherpaPayload(data) {
+  if (data === "Done!") {
+    return { done: true };
+  }
+  if (typeof data !== "string") {
+    return null;
+  }
+  const trimmed = data.trim();
+  if (!trimmed || trimmed === "Done!") {
+    return { done: true };
+  }
+  try {
+    const parsed = JSON.parse(trimmed);
+    return {
+      text: extractSherpaText(parsed),
+      raw: parsed
+    };
+  } catch {
+    return { text: trimmed };
+  }
+}
+
+function extractSherpaText(value) {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const preferredKeys = [
+    "text",
+    "result",
+    "transcript",
+    "partial",
+    "final",
+    "sentence",
+    "utterance",
+    "hypothesis",
+    "nbest",
+    "tokens",
+    "segment",
+    "segments"
+  ];
+
+  for (const key of preferredKeys) {
+    if (!(key in value)) continue;
+    const extracted = extractSherpaText(value[key]);
+    if (extracted) return extracted;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => extractSherpaText(item))
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return "";
+}
+
+function stringifySherpaMessage(data) {
+  if (typeof data === "string") {
+    return data.length > 240 ? `${data.slice(0, 240)}...` : data;
+  }
+  if (data instanceof ArrayBuffer) {
+    return `[binary ${data.byteLength} bytes]`;
+  }
+  return Object.prototype.toString.call(data);
+}
+
+function normalizeSherpaText(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*([，。！？；：、])\s*/g, "$1")
+    .trim();
+}
+
+function joinSherpaText(previous, next) {
+  const head = normalizeSherpaText(previous);
+  const tail = normalizeSherpaText(next);
+  if (!head) return tail;
+  if (!tail) return head;
+  if (tail.startsWith(head)) return tail;
+  if (head.endsWith(tail)) return head;
+  return `${head} ${tail}`.trim();
+}
+
+async function aiSegmentTranscript(options = {}) {
   if (!state.segments.length && els.manualText.value.trim()) {
     addManualSegment();
   }
@@ -242,13 +726,97 @@ async function aiSegmentTranscript() {
     });
     if (Array.isArray(result.segments) && result.segments.length) {
       state.segments = result.segments;
+      if (!options.automatic) {
+        invalidateReview(["transcriptReviewed", "finalReviewed"]);
+      } else {
+        els.transcriptReviewed.checked = false;
+        els.finalReviewed.checked = false;
+      }
       renderSegments();
-      setStatus("对话已整理");
+      renderClinicalAlerts();
+      addAuditEvent(options.automatic ? "结束后自动 AI 校对转写稿" : "AI 标注对话角色");
+      setStatus(options.automatic ? "转写已自动校对" : "对话已整理，请复核");
+      updateActionStates();
+      return true;
     } else {
       setStatus("未返回有效分段", "error");
+      return false;
     }
   } catch (error) {
     setStatus(error.message, "error");
+    if (!options.automatic) {
+      throw error;
+    }
+    return false;
+  }
+}
+
+async function finalizeRecordingWorkflow() {
+  state.finalizingRecording = true;
+  try {
+    await waitForSherpaFinal(1200);
+    freezeSherpaDraft();
+    const prepared = hasSherpaDraft() ? applySherpaDraftForFinalization() : await transcribeRecording({ final: true });
+    if (!prepared) {
+      setRecorderNote("没有可用转写稿，请检查 sherpa WebSocket 或 Whisper 设置后手动点击“转写录音”。", "error");
+      return false;
+    }
+
+    await autoProofreadTranscript();
+    await generateReport({ automatic: true, skipGate: true, autoDraft: true });
+    return true;
+  } finally {
+    state.finalizingRecording = false;
+  }
+}
+
+function hasSherpaDraft() {
+  return state.sherpaSegments.some((segment) => String(segment.text || "").trim());
+}
+
+function freezeSherpaDraft() {
+  state.sherpaSessionId += 1;
+  state.sherpaConnected = false;
+  state.sherpaFinalizing = false;
+}
+
+function applySherpaDraftForFinalization() {
+  state.segments = state.sherpaSegments.map((segment) => ({ ...segment }));
+  state.lastTranscribedAt = new Date().toISOString();
+  invalidateReview(["transcriptReviewed", "finalReviewed"]);
+  renderSegments();
+  renderClinicalAlerts();
+  addAuditEvent("使用 sherpa 实时草稿作为结束后校对输入");
+  setStatus("实时草稿待校对", "busy");
+  setRecorderNote("录音结束，正在用 sherpa 实时草稿做 AI 角色校对并生成报告草稿。", "busy");
+  updateActionStates();
+  return true;
+}
+
+function waitForSherpaFinal(timeoutMs) {
+  if (!state.sherpaFinalizing) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (!state.sherpaFinalizing || Date.now() - startedAt >= timeoutMs) {
+        state.sherpaFinalizing = false;
+        clearInterval(timer);
+        resolve();
+      }
+    }, 80);
+  });
+}
+
+async function autoProofreadTranscript() {
+  try {
+    await aiSegmentTranscript({ automatic: true });
+    addAuditEvent("结束后自动校对转写稿");
+    return true;
+  } catch (error) {
+    setRecorderNote(`AI 校对失败，请手动检查转写：${error.message}`, "error");
+    return false;
   }
 }
 
@@ -258,22 +826,33 @@ async function generateReport(options = {}) {
     return;
   }
 
+  const gate = options.skipGate ? "" : reportGateMessage();
+  if (gate) {
+    setStatus(gate, "error");
+    setRecorderNote(gate, "error");
+    return false;
+  }
+
   try {
     setStatus("生成报告中", "busy");
-    if (options.automatic) {
-      setRecorderNote("转写完成，正在自动生成报告草稿。", "busy");
-    }
     const result = await postJson("/api/report", {
       settings: readChatSettings(),
       encounter: readEncounter(),
+      review: options.autoDraft ? { ...readReviewState(), autoDraft: true } : readReviewState(),
       segments: state.segments
     });
     state.report = result.report;
+    state.clinicalAlerts = Array.isArray(result.report?.clinicalAlerts) ? result.report.clinicalAlerts : [];
+    state.evidence = Array.isArray(result.report?.evidenceTrace) ? result.report.evidenceTrace : [];
+    state.lastGeneratedAt = new Date().toISOString();
+    els.finalReviewed.checked = false;
     renderReport(state.report);
-    setStatus("报告已生成");
-    if (options.automatic) {
-      setRecorderNote("自动转写和报告生成已完成。");
-    }
+    renderClinicalAlerts();
+    renderEvidence();
+    addAuditEvent("生成结构化报告草稿");
+    setStatus(options.automatic ? "自动草稿已生成" : "报告已生成");
+    setRecorderNote("报告草稿已生成。请医生复核后勾选最终报告确认，再复制或打印。");
+    updateActionStates();
     return true;
   } catch (error) {
     setStatus(error.message, "error");
@@ -300,6 +879,53 @@ async function testResponsesEndpoint() {
   }
 }
 
+function testSherpaConnection() {
+  const wsUrl = els.sherpaWsUrl.value.trim();
+  if (!wsUrl) {
+    setStatus("请填写 Sherpa 实时 WS", "error");
+    showApiTestResult("Sherpa WebSocket 地址为空。");
+    return;
+  }
+
+  let socket;
+  const timeoutMs = 3500;
+  try {
+    els.testSherpaBtn.disabled = true;
+    setStatus("测试实时连接中", "busy");
+    showApiTestResult(`正在连接 ${wsUrl} ...`);
+    socket = new WebSocket(wsUrl);
+  } catch (error) {
+    els.testSherpaBtn.disabled = false;
+    setStatus("实时连接失败", "error");
+    showApiTestResult(error.message);
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    try {
+      socket.close();
+    } catch {}
+    els.testSherpaBtn.disabled = false;
+    setStatus("实时连接超时", "error");
+    showApiTestResult(`连接 ${wsUrl} 超时。请确认 sherpa-onnx WebSocket 服务已启动并监听该端口。`);
+  }, timeoutMs);
+
+  socket.addEventListener("open", () => {
+    clearTimeout(timer);
+    els.testSherpaBtn.disabled = false;
+    setStatus("实时连接通过");
+    showApiTestResult(`Sherpa WebSocket 已连接：${wsUrl}\n录音时页面会发送 16kHz float32 PCM；如果仍无文字，请查看 sherpa 服务端日志是否收到音频并返回文本。`);
+    socket.close();
+  });
+
+  socket.addEventListener("error", () => {
+    clearTimeout(timer);
+    els.testSherpaBtn.disabled = false;
+    setStatus("实时连接失败", "error");
+    showApiTestResult(`无法连接 ${wsUrl}。\n常见原因：sherpa-onnx 服务未启动、端口不是 6006、浏览器页面不是 localhost、或 WebSocket 地址填错。`);
+  });
+}
+
 function addManualSegment() {
   const text = els.manualText.value.trim();
   if (!text) {
@@ -314,7 +940,11 @@ function addManualSegment() {
     end: ""
   });
   els.manualText.value = "";
+  invalidateReview(["transcriptReviewed", "finalReviewed"]);
   renderSegments();
+  renderClinicalAlerts();
+  addAuditEvent("手动新增对话片段");
+  updateActionStates();
   setStatus("已新增");
 }
 
@@ -339,13 +969,27 @@ function renderSegments() {
 
     speaker.addEventListener("change", () => {
       state.segments[index].speaker = speaker.value;
+      invalidateReview(["transcriptReviewed", "finalReviewed"]);
+      renderClinicalAlerts();
+      addAuditEvent(`修改片段 ${index + 1} 说话人`);
+      updateActionStates();
     });
     text.addEventListener("input", () => {
       state.segments[index].text = text.value;
+      invalidateReview(["transcriptReviewed", "finalReviewed"]);
+      renderClinicalAlerts();
+      updateActionStates();
+    });
+    text.addEventListener("change", () => {
+      addAuditEvent(`修改片段 ${index + 1} 文本`);
     });
     deleteBtn.addEventListener("click", () => {
       state.segments.splice(index, 1);
+      invalidateReview(["transcriptReviewed", "finalReviewed"]);
       renderSegments();
+      renderClinicalAlerts();
+      addAuditEvent(`删除片段 ${index + 1}`);
+      updateActionStates();
     });
 
     els.segments.append(node);
@@ -357,10 +1001,45 @@ function renderReport(report) {
   els.reportEditor.value = state.reportText;
 }
 
+function extractPerioChart() {
+  const text = state.segments.map((segment) => segment.text).join("\n");
+  if (!text.trim() && !els.examFindings.value.trim()) {
+    setStatus("没有可摘录的检查内容", "error");
+    return;
+  }
+  const lines = extractPerioLines(`${els.examFindings.value}\n${text}`);
+  if (!lines.length) {
+    setStatus("未找到牙周或检查指标", "error");
+    return;
+  }
+  const existing = els.perioChart.value.trim();
+  els.perioChart.value = [existing, ...lines].filter(Boolean).join(existing ? "\n" : "");
+  invalidateReview(["historyReviewed", "planReviewed", "finalReviewed"]);
+  renderClinicalAlerts();
+  addAuditEvent(`摘录牙周/检查指标：${lines.length} 条`);
+  setStatus("已摘录检查指标");
+}
+
+function buildDocumentDraft(type) {
+  const gate = finalOutputGateMessage();
+  if (gate) {
+    setStatus(gate, "error");
+    return;
+  }
+  const text = type === "referral" ? formatReferralLetter() : formatPatientSummary();
+  els.reportEditor.value = text;
+  state.reportText = text;
+  els.finalReviewed.checked = false;
+  addAuditEvent(type === "referral" ? "生成转诊信草稿" : "生成患者说明草稿");
+  updateActionStates();
+  setStatus(type === "referral" ? "转诊信草稿已生成" : "患者说明草稿已生成");
+}
+
 function reportHeader() {
   const encounter = readEncounter();
   return [
     encounter.patientName && `患者：${encounter.patientName}`,
+    encounter.patientId && `编号：${encounter.patientId}`,
     encounter.doctorName && `医生：${encounter.doctorName}`,
     encounter.visitDate && `日期：${encounter.visitDate}`
   ].filter(Boolean).join("  ");
@@ -372,8 +1051,24 @@ async function copyReport() {
     setStatus("没有可复制的报告", "error");
     return;
   }
+  const gate = finalOutputGateMessage();
+  if (gate) {
+    setStatus(gate, "error");
+    return;
+  }
   await navigator.clipboard.writeText(text);
+  addAuditEvent("复制最终文档");
   setStatus("已复制");
+}
+
+function printReport() {
+  const gate = finalOutputGateMessage();
+  if (gate) {
+    setStatus(gate, "error");
+    return;
+  }
+  addAuditEvent("打印最终文档");
+  window.print();
 }
 
 function setReportPlaceholder(text) {
@@ -384,9 +1079,15 @@ function setReportPlaceholder(text) {
 function saveCase() {
   localStorage.setItem("dentalVoiceAgent.case", JSON.stringify({
     encounter: readEncounter(),
+    review: readReviewState(),
     segments: state.segments,
+    clinicalAlerts: state.clinicalAlerts,
+    evidence: state.evidence,
+    auditLog: state.auditLog,
     report: state.report,
     reportText: els.reportEditor.value,
+    lastTranscribedAt: state.lastTranscribedAt,
+    lastGeneratedAt: state.lastGeneratedAt,
     savedAt: new Date().toISOString()
   }));
   saveSettings();
@@ -402,10 +1103,19 @@ function loadCase() {
   try {
     const saved = JSON.parse(raw);
     writeEncounter(saved.encounter || {});
+    writeReviewState(saved.review || {});
     state.segments = Array.isArray(saved.segments) ? saved.segments : [];
+    state.clinicalAlerts = Array.isArray(saved.clinicalAlerts) ? saved.clinicalAlerts : [];
+    state.evidence = Array.isArray(saved.evidence) ? saved.evidence : [];
+    state.auditLog = Array.isArray(saved.auditLog) ? saved.auditLog : [];
     state.report = saved.report || null;
     state.reportText = saved.reportText || "";
+    state.lastTranscribedAt = saved.lastTranscribedAt || "";
+    state.lastGeneratedAt = saved.lastGeneratedAt || "";
     renderSegments();
+    renderClinicalAlerts();
+    renderEvidence();
+    renderAuditLog();
     if (state.report) {
       renderReport(state.report);
       if (state.reportText) {
@@ -414,6 +1124,7 @@ function loadCase() {
     } else if (state.reportText) {
       els.reportEditor.value = state.reportText;
     }
+    updateActionStates();
     setStatus("会话已读取");
   } catch {
     setStatus("会话数据不可用", "error");
@@ -452,10 +1163,12 @@ function saveSettings() {
   const shouldRemember = els.rememberSettings.checked;
   const settings = {
     remember: shouldRemember,
-    apiKey: shouldRemember ? els.apiKey.value : "",
+    apiKey: "",
     baseUrl: els.baseUrl.value,
     whisperCommand: els.whisperCommand.value,
     transcriptionModel: els.transcriptionModel.value,
+    sherpaWsUrl: els.sherpaWsUrl.value,
+    streamingEnabled: els.streamingEnabled.checked,
     reportModel: els.reportModel.value
   };
   localStorage.setItem("dentalVoiceAgent.settings", JSON.stringify(settings));
@@ -467,9 +1180,11 @@ function loadSettings() {
   try {
     const settings = JSON.parse(raw);
     els.rememberSettings.checked = Boolean(settings.remember);
-    els.apiKey.value = settings.apiKey || "";
+    els.apiKey.value = "";
     els.baseUrl.value = settings.baseUrl || "https://api.openai.com/v1";
     els.whisperCommand.value = settings.whisperCommand || "whisper";
+    els.sherpaWsUrl.value = settings.sherpaWsUrl || "ws://localhost:6006";
+    els.streamingEnabled.checked = settings.streamingEnabled !== false;
     els.transcriptionModel.value =
       !settings.transcriptionModel ||
       settings.transcriptionModel === "base" ||
@@ -486,10 +1201,32 @@ function loadSettings() {
 function readEncounter() {
   return {
     patientName: els.patientName.value.trim(),
+    patientId: els.patientId.value.trim(),
     doctorName: els.doctorName.value.trim(),
     visitDate: els.visitDate.value,
     chiefNote: els.chiefNote.value.trim(),
-    consentConfirmed: els.consent.checked
+    medicalHistory: els.medicalHistory.value.trim(),
+    allergies: els.allergies.value.trim(),
+    medications: els.medications.value.trim(),
+    dentalHistory: els.dentalHistory.value.trim(),
+    examFindings: els.examFindings.value.trim(),
+    perioChart: els.perioChart.value.trim(),
+    imagingFindings: els.imagingFindings.value.trim(),
+    diagnoses: els.diagnoses.value.trim(),
+    treatmentConsent: els.treatmentConsent.value.trim(),
+    followUp: els.followUp.value.trim(),
+    consentConfirmed: els.consent.checked,
+    privacyConfirmed: els.privacyConfirmed.checked
+  };
+}
+
+function readReviewState() {
+  return {
+    transcriptReviewed: els.transcriptReviewed.checked,
+    historyReviewed: els.historyReviewed.checked,
+    planReviewed: els.planReviewed.checked,
+    finalReviewed: els.finalReviewed.checked,
+    reviewedAt: els.finalReviewed.checked ? new Date().toISOString() : ""
   };
 }
 
@@ -502,14 +1239,55 @@ function formatReportText(report = {}) {
     report.reportTitle || "口腔健康诊疗报告草稿",
     reportHeader(),
     "",
+    "状态：AI 草稿，未签署前不得作为最终病历。",
+    "",
     sectionText("主诉情况", report.chiefComplaintSummary || plainField(report.chiefComplaint)),
+    sectionText("病史与风险", formatHistoryAndRisk(report)),
+    sectionText("口腔检查与影像", formatExamAndImaging(report)),
+    sectionText("诊断/问题清单", formatDiagnosisList(report.diagnoses || report.assessment)),
     sectionText("接诊分析", report.visitAnalysis || buildLegacyAnalysis(report)),
     sectionText("治疗方案", formatTreatmentPlan(report.treatmentPlan)),
+    sectionText("知情同意", report.informedConsent || ""),
+    sectionText("术后医嘱/复诊", report.followUp || ""),
+    sectionText("待医生补充/确认", formatOpenItems(report.openItems)),
     "",
-    "医生确认："
+    "医生确认：",
+    "签署时间："
   ];
 
   return lines.filter((line) => line !== null).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function formatHistoryAndRisk(report) {
+  const value = report.historyAndRisk || {};
+  return [
+    value.medicalHistory && `全身病史：${value.medicalHistory}`,
+    value.allergies && `过敏史：${value.allergies}`,
+    value.medications && `用药史：${value.medications}`,
+    value.dentalHistory && `牙科既往史：${value.dentalHistory}`,
+    value.riskNotes && `风险提示：${value.riskNotes}`
+  ].filter(Boolean).join("\n");
+}
+
+function formatExamAndImaging(report) {
+  return [
+    plainField(report.oralExam || report.examFindings),
+    plainField(report.perioChart || readEncounter().perioChart),
+    plainField(report.imagingFindings)
+  ].filter(Boolean).join("\n");
+}
+
+function formatDiagnosisList(items) {
+  if (typeof items === "string") return items;
+  if (!Array.isArray(items)) return "";
+  return items
+    .map((item) => {
+      if (typeof item === "string") return item;
+      return item.name || item.diagnosisOrProblem || "";
+    })
+    .filter(Boolean)
+    .map((line) => `- ${line}`)
+    .join("\n");
 }
 
 function buildLegacyAnalysis(report) {
@@ -531,11 +1309,25 @@ function formatTreatmentPlan(items) {
       const text = String(raw).trim();
       if (!text) return "";
       const source = typeof item === "object" ? String(item.source || "").toLowerCase() : "";
+      const evidence = typeof item === "object" && Array.isArray(item.evidenceSegmentIds) && item.evidenceSegmentIds.length
+        ? `（依据：${item.evidenceSegmentIds.join(", ")}）`
+        : "";
       if (source === "ai" && !text.startsWith("[AI]")) {
-        return `[AI] ${text}`;
+        return `[AI] ${text}${evidence}`;
       }
-      return text;
+      return `${text}${evidence}`;
     })
+    .filter(Boolean)
+    .map((line) => `- ${line}`)
+    .join("\n");
+}
+
+function formatOpenItems(items) {
+  if (!Array.isArray(items) || !items.length) {
+    return "无";
+  }
+  return items
+    .map((item) => String(item || "").trim())
     .filter(Boolean)
     .map((line) => `- ${line}`)
     .join("\n");
@@ -560,12 +1352,245 @@ function plainList(items, mapper) {
     .join("\n");
 }
 
+function invalidateReview(keys = reviewInputs) {
+  keys.forEach((key) => {
+    els[key].checked = false;
+  });
+  updateActionStates();
+}
+
+function reportGateMessage() {
+  if (!els.consent.checked) return "请先确认患者录音和 AI 辅助整理授权";
+  if (!els.privacyConfirmed.checked) return "请先确认隐私和数据留存要求";
+  if (!els.transcriptReviewed.checked) return "请先核对转写文本、说话人和牙位";
+  if (!els.historyReviewed.checked) return "请先核对病史、过敏史、用药史和禁忌证";
+  if (!els.planReviewed.checked) return "请先核对诊断、治疗方案、风险替代方案和复诊医嘱";
+  return "";
+}
+
+function finalOutputGateMessage() {
+  if (!els.reportEditor.value.trim()) return "没有可输出的报告";
+  if (reportGateMessage()) return reportGateMessage();
+  if (!els.finalReviewed.checked) return "请先完成最终报告医生审核";
+  return "";
+}
+
+function updateActionStates() {
+  const hasSegments = state.segments.some((segment) => String(segment.text || "").trim());
+  const canGenerate = hasSegments && !reportGateMessage();
+  const canOutput = !finalOutputGateMessage();
+  els.generateReportBtn.disabled = !canGenerate;
+  els.patientSummaryBtn.disabled = !canOutput;
+  els.referralLetterBtn.disabled = !canOutput;
+  els.copyReportBtn.disabled = !canOutput;
+  els.printBtn.disabled = !canOutput;
+}
+
+function renderClinicalAlerts() {
+  if (!els.riskPanel) return;
+  const localAlerts = localRiskAlerts(readEncounter(), state.segments);
+  const remoteAlerts = state.clinicalAlerts
+    .map((alert) => typeof alert === "string" ? alert : alert.message || "")
+    .filter(Boolean);
+  const alerts = unique([...localAlerts, ...remoteAlerts]);
+  if (!alerts.length) {
+    els.riskPanel.hidden = true;
+    els.riskPanel.innerHTML = "";
+    return;
+  }
+  els.riskPanel.hidden = false;
+  els.riskPanel.innerHTML = [
+    "<strong>审核提示</strong>",
+    "<ul>",
+    ...alerts.map((alert) => `<li>${escapeHtml(alert)}</li>`),
+    "</ul>"
+  ].join("");
+}
+
+function renderEvidence() {
+  if (!els.evidencePanel) return;
+  const evidence = state.evidence.filter((item) => item && (item.claim || item.segmentId || item.source));
+  if (!evidence.length) {
+    els.evidencePanel.hidden = true;
+    els.evidencePanel.innerHTML = "";
+    return;
+  }
+  els.evidencePanel.hidden = false;
+  els.evidencePanel.innerHTML = [
+    "<strong>证据链</strong>",
+    "<ul>",
+    ...evidence.map((item) => {
+      const claim = item.claim || item.item || "记录项";
+      const segmentId = item.segmentId || item.evidenceSegmentId || "";
+      const source = item.source || "";
+      return `<li>${escapeHtml(claim)}${segmentId ? `（片段：${escapeHtml(segmentId)}）` : ""}${source ? ` - ${escapeHtml(source)}` : ""}</li>`;
+    }),
+    "</ul>"
+  ].join("");
+}
+
+function renderAuditLog() {
+  if (!els.auditPanel) return;
+  if (!state.auditLog.length) {
+    els.auditPanel.hidden = true;
+    els.auditPanel.innerHTML = "";
+    return;
+  }
+  els.auditPanel.hidden = false;
+  els.auditPanel.innerHTML = [
+    "<strong>本地审计日志</strong>",
+    "<ol>",
+    ...state.auditLog.slice(-12).map((item) => `<li>${escapeHtml(formatAuditItem(item))}</li>`),
+    "</ol>"
+  ].join("");
+}
+
+function addAuditEvent(action) {
+  state.auditLog.push({
+    at: new Date().toISOString(),
+    action,
+    doctorName: els.doctorName.value.trim()
+  });
+  renderAuditLog();
+}
+
+function formatAuditItem(item) {
+  const at = item.at ? new Date(item.at).toLocaleString("zh-CN", { hour12: false }) : "";
+  const doctor = item.doctorName ? ` - ${item.doctorName}` : "";
+  return `${at} ${item.action}${doctor}`.trim();
+}
+
+function localRiskAlerts(encounter, segments) {
+  const alerts = [];
+  const required = [
+    ["过敏史", encounter.allergies],
+    ["用药史", encounter.medications],
+    ["全身病史", encounter.medicalHistory],
+    ["检查所见", encounter.examFindings],
+    ["诊断/问题清单", encounter.diagnoses],
+    ["知情同意要点", encounter.treatmentConsent],
+    ["术后医嘱/复诊", encounter.followUp]
+  ];
+  required.forEach(([label, value]) => {
+    if (!String(value || "").trim()) alerts.push(`${label}为空，请医生确认是否为无或待补充。`);
+  });
+  const text = `${Object.values(encounter).join(" ")} ${segments.map((segment) => segment.text).join(" ")}`;
+  const surgicalKeywords = /拔牙|种植|翻瓣|切开|缝合|骨粉|植骨|根管|开髓|麻醉|处方|抗生素|止痛药/;
+  if (surgicalKeywords.test(text) && !String(encounter.treatmentConsent || "").trim()) {
+    alerts.push("涉及手术、麻醉、处方或根管等高风险项目，请补充风险、替代方案和知情同意。");
+  }
+  if (segments.some((segment) => segment.speaker === "unknown")) {
+    alerts.push("仍有待确认说话人片段，请核对后再定稿。");
+  }
+  if (/牙周|探诊|出血|BOP|松动|附着|PD|袋|龈/.test(text) && !String(encounter.perioChart || "").trim()) {
+    alerts.push("对话涉及牙周检查，请摘录探诊深度、出血、松动度或确认无需牙周记录。");
+  }
+  return alerts;
+}
+
+function unique(items) {
+  return [...new Set(items.filter(Boolean))];
+}
+
+function extractPerioLines(text) {
+  const source = String(text || "");
+  const sentences = source
+    .replace(/\s+/g, " ")
+    .split(/(?<=[。！？!?；;])\s*|[\n\r]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const perioPattern = /牙周|探诊|出血|BOP|PD|袋|附着|松动|动度|龈|mm|毫米|[1-4]?[1-8]\s*(近中|远中|颊|舌|腭|唇|MB|DB|ML|DL)/i;
+  return unique(sentences.filter((line) => perioPattern.test(line))).slice(0, 12);
+}
+
+function formatPatientSummary() {
+  const encounter = readEncounter();
+  return [
+    "患者说明草稿",
+    reportHeader(),
+    "",
+    "本次主要问题：",
+    plainOrPlaceholder(state.report?.chiefComplaintSummary || encounter.chiefNote),
+    "",
+    "医生需要您了解的重点：",
+    plainOrPlaceholder(state.report?.visitAnalysis || encounter.diagnoses),
+    "",
+    "拟定处理计划：",
+    formatTreatmentPlan(state.report?.treatmentPlan),
+    "",
+    "注意事项与复诊：",
+    plainOrPlaceholder(state.report?.followUp || encounter.followUp),
+    "",
+    "说明：以上内容为医生审核后的患者沟通草稿，不替代最终病历或处方。"
+  ].join("\n").trim();
+}
+
+function formatReferralLetter() {
+  const encounter = readEncounter();
+  return [
+    "转诊信草稿",
+    reportHeader(),
+    "",
+    "转诊原因：",
+    plainOrPlaceholder(state.report?.chiefComplaintSummary || encounter.chiefNote),
+    "",
+    "病史与风险：",
+    plainOrPlaceholder(formatHistoryAndRisk(state.report || {})),
+    "",
+    "检查与影像：",
+    plainOrPlaceholder(formatExamAndImaging(state.report || {})),
+    "",
+    "诊断/问题清单：",
+    plainOrPlaceholder(formatDiagnosisList(state.report?.diagnoses) || encounter.diagnoses),
+    "",
+    "已沟通/已处理：",
+    plainOrPlaceholder(state.report?.informedConsent || encounter.treatmentConsent),
+    "",
+    "请会诊/处理建议：",
+    plainOrPlaceholder(formatTreatmentPlan(state.report?.treatmentPlan)),
+    "",
+    "转出医生签名："
+  ].join("\n").trim();
+}
+
+function plainOrPlaceholder(value) {
+  return String(value || "").trim() || "待医生补充";
+}
+
+function reviewLabel(key) {
+  return {
+    transcriptReviewed: "转写核对",
+    historyReviewed: "病史风险核对",
+    planReviewed: "方案核对",
+    finalReviewed: "最终报告核对"
+  }[key] || key;
+}
+
 function writeEncounter(encounter) {
   els.patientName.value = encounter.patientName || "";
+  els.patientId.value = encounter.patientId || "";
   els.doctorName.value = encounter.doctorName || "";
   els.visitDate.value = encounter.visitDate || new Date().toISOString().slice(0, 10);
   els.chiefNote.value = encounter.chiefNote || "";
+  els.medicalHistory.value = encounter.medicalHistory || "";
+  els.allergies.value = encounter.allergies || "";
+  els.medications.value = encounter.medications || "";
+  els.dentalHistory.value = encounter.dentalHistory || "";
+  els.examFindings.value = encounter.examFindings || "";
+  els.perioChart.value = encounter.perioChart || "";
+  els.imagingFindings.value = encounter.imagingFindings || "";
+  els.diagnoses.value = encounter.diagnoses || "";
+  els.treatmentConsent.value = encounter.treatmentConsent || "";
+  els.followUp.value = encounter.followUp || "";
   els.consent.checked = Boolean(encounter.consentConfirmed);
+  els.privacyConfirmed.checked = Boolean(encounter.privacyConfirmed);
+}
+
+function writeReviewState(review) {
+  els.transcriptReviewed.checked = Boolean(review.transcriptReviewed);
+  els.historyReviewed.checked = Boolean(review.historyReviewed);
+  els.planReviewed.checked = Boolean(review.planReviewed);
+  els.finalReviewed.checked = Boolean(review.finalReviewed);
 }
 
 async function postJson(path, payload) {
@@ -620,10 +1645,11 @@ function pickMimeType() {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
 }
 
-function fileNameForMime(mimeType) {
-  if (mimeType.includes("mp4")) return "recording.mp4";
-  if (mimeType.includes("ogg")) return "recording.ogg";
-  return "recording.webm";
+function fileNameForMime(mimeType, label = "recording") {
+  const safeLabel = String(label || "recording").replace(/[^\w.-]/g, "_");
+  if (mimeType.includes("mp4")) return `${safeLabel}.mp4`;
+  if (mimeType.includes("ogg")) return `${safeLabel}.ogg`;
+  return `${safeLabel}.webm`;
 }
 
 function formatBytes(bytes) {

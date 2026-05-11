@@ -335,10 +335,17 @@ async function segmentTranscript(body) {
 async function generateReport(body) {
   const settings = readSettings(body.settings, "chat");
   const encounter = body.encounter || {};
+  const review = body.review || {};
   const segments = Array.isArray(body.segments) ? body.segments : [];
   if (!segments.some((segment) => String(segment.text || "").trim())) {
     const error = new Error("At least one transcript segment is required");
     error.status = 400;
+    throw error;
+  }
+  if (!review.autoDraft && (!review.transcriptReviewed || !review.historyReviewed || !review.planReviewed)) {
+    const error = new Error("Doctor review gates must be completed before generating a report");
+    error.status = 400;
+    error.publicMessage = "生成报告前必须完成医生审核关口";
     throw error;
   }
 
@@ -352,28 +359,65 @@ async function generateReport(body) {
 
   const content = await callResponsesJson(
     settings,
-    "你是口腔医疗场景的 AI 病历书记员。请把医患对话整理成报告草稿，报告必须只包含三个部分：主诉情况、接诊分析、治疗方案。主诉情况和接诊分析必须严格基于对话原文。治疗方案优先整理医生明确提到的方案；如果医生没有提及治疗方案，或方案明显缺失，可以根据接诊分析补充 AI 建议，但每条 AI 补充建议必须在句首加 [AI]。输出必须是中文 JSON。",
+    "你是口腔医疗场景的 AI 病历书记员。请生成供医生审核的结构化病历草稿。必须严格区分医生/患者原文、医生手动填写字段和 AI 补充建议；不能编造未出现的检查、影像、诊断或治疗承诺。每个重要判断都要尽量给出 evidenceTrace。输出必须是中文 JSON。",
     JSON.stringify({
-        task: "create_three_part_dental_report_draft",
+        task: "create_structured_dental_record_draft",
         safety_rules: [
-          "主诉情况：只整理患者主诉、症状、持续时间、诱因、部位等已出现信息",
-          "接诊分析：整理医生问诊、检查、判断和问题分析；不能编造未出现的检查或影像结果",
-          "治疗方案：医生明确说过的治疗方案不要加 [AI]",
-          "治疗方案：根据接诊分析补充的建议必须句首加 [AI]",
-          "如果无法确定某内容来自医生还是 AI，按 AI 补充处理并加 [AI]",
-          "不要输出三个部分之外的正文段落"
+          "主诉情况只整理患者主诉、症状、持续时间、诱因、部位等已出现信息",
+          "病史与风险优先使用 encounter 中医生手动填写的字段；缺失时列入 openItems",
+          "口腔检查、牙周、影像、诊断必须基于 encounter 或 transcript；不能虚构检查结果",
+          "治疗方案中医生明确说过或 encounter 明确填写的内容 source=doctor；模型推理或补充 source=ai 且 item 句首必须加 [AI]",
+          "涉及拔牙、根管、种植、麻醉、处方、抗凝/糖尿病/妊娠/过敏风险时，必须在 clinicalAlerts 或 openItems 提醒医生确认",
+          "evidenceTrace 用于说明报告中的关键事实来自哪个 transcript id 或 encounter 字段",
+          "不能把 AI 建议写成已确诊或已同意的正式医嘱",
+          "如果 review.autoDraft=true，必须在 openItems 中提醒医生复核转写、病史风险和治疗计划后才能定稿"
         ],
         encounter,
+        review,
         transcript,
         output_shape: {
           reportTitle: "口腔健康诊疗报告草稿",
           chiefComplaintSummary: "",
+          historyAndRisk: {
+            medicalHistory: "",
+            allergies: "",
+            medications: "",
+            dentalHistory: "",
+            riskNotes: ""
+          },
+          oralExam: "",
+          perioChart: "",
+          imagingFindings: "",
+          diagnoses: [
+            {
+              name: "",
+              status: "confirmed | suspected | needs_exam",
+              evidenceSegmentIds: []
+            }
+          ],
           visitAnalysis: "",
           treatmentPlan: [
             {
               item: "",
               source: "doctor | ai",
               evidenceSegmentIds: []
+            }
+          ],
+          informedConsent: "",
+          followUp: "",
+          clinicalAlerts: [
+            {
+              severity: "warning | critical",
+              message: "",
+              evidenceSegmentIds: []
+            }
+          ],
+          openItems: [],
+          evidenceTrace: [
+            {
+              claim: "",
+              source: "encounter.field | transcript",
+              segmentId: ""
             }
           ]
         }

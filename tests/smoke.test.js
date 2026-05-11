@@ -32,9 +32,32 @@ const mockServer = createServer(async (req, res) => {
         : {
             reportTitle: "口腔健康诊疗报告草稿",
             chiefComplaintSummary: "右下后牙疼痛三天",
+            historyAndRisk: {
+              medicalHistory: request.encounter.medicalHistory,
+              allergies: request.encounter.allergies,
+              medications: request.encounter.medications,
+              dentalHistory: request.encounter.dentalHistory,
+              riskNotes: "无明确高危病史。"
+            },
+            oralExam: request.encounter.examFindings,
+            perioChart: request.encounter.perioChart,
+            imagingFindings: request.encounter.imagingFindings,
+            diagnoses: [
+              { name: "右下后牙疼痛待查", status: "needs_exam", evidenceSegmentIds: ["s1"] }
+            ],
             visitAnalysis: "患者诉右下后牙疼痛三天，需进一步口内检查明确病因。",
             treatmentPlan: [
-              { item: "建议完善口腔检查并必要时拍片。", source: "ai", evidenceSegmentIds: [] }
+              { item: "[AI] 建议完善口腔检查并必要时拍片。", source: "ai", evidenceSegmentIds: ["s1"] }
+            ],
+            informedConsent: request.encounter.treatmentConsent,
+            followUp: request.encounter.followUp,
+            clinicalAlerts: [
+              { severity: "warning", message: "治疗前需确认影像和诊断。", evidenceSegmentIds: ["s1"] }
+            ],
+            openItems: ["医生确认最终诊断。"],
+            evidenceTrace: [
+              { claim: "右下后牙疼痛三天", source: "transcript", segmentId: "s1" },
+              { claim: "检查所见来自医生手动填写", source: "encounter.examFindings", segmentId: "" }
             ]
           };
 
@@ -82,6 +105,25 @@ try {
   const health = await fetchJson(`http://127.0.0.1:${appPort}/api/health`);
   assert(health.ok === true, "health check should return ok");
 
+  const html = await fetchText(`http://127.0.0.1:${appPort}/`);
+  assert(html.includes("id=\"transcriptReviewed\""), "page should include transcript review gate");
+  assert(html.includes("id=\"extractPerioBtn\""), "page should include perio extraction control");
+  assert(html.includes("id=\"patientSummaryBtn\""), "page should include patient summary control");
+  assert(html.includes("id=\"referralLetterBtn\""), "page should include referral letter control");
+  assert(html.includes("id=\"auditPanel\""), "page should include audit panel");
+  assert(html.includes("id=\"sherpaWsUrl\""), "page should include sherpa websocket setting");
+  assert(html.includes("id=\"streamingEnabled\""), "page should include streaming toggle");
+  assert(html.includes("id=\"testSherpaBtn\""), "page should include sherpa websocket test button");
+
+  const appJs = await fetchText(`http://127.0.0.1:${appPort}/app.js`);
+  assert(appJs.includes("apiKey: \"\""), "frontend should not persist API keys in settings");
+  assert(appJs.includes("new WebSocket(wsUrl)"), "frontend should connect to sherpa websocket");
+  assert(appJs.includes("const sherpaTargetSampleRate = 16000"), "frontend should stream 16 kHz audio to sherpa");
+  assert(appJs.includes("socket.send(\"Done\")"), "frontend should signal sherpa stream completion");
+  assert(appJs.includes("applySherpaDraftForFinalization"), "frontend should use sherpa draft for automatic finalization");
+  assert(appJs.includes("extractSherpaText"), "frontend should extract text from varied sherpa payloads");
+  assert(appJs.includes("sherpaMessagesReceived"), "frontend should expose sherpa message diagnostics");
+
   const settings = {
     apiKey: "test-key",
     baseUrl,
@@ -111,15 +153,68 @@ try {
   assert(segmented.segments.length === 2, "segment endpoint should return two segments");
   assert(segmented.segments[0].speaker === "doctor", "first segment should be doctor");
 
-  const report = await postJson(`http://127.0.0.1:${appPort}/api/report`, {
+  const blocked = await postJsonExpectError(`http://127.0.0.1:${appPort}/api/report`, {
     settings,
     encounter: { patientName: "张三", doctorName: "李医生" },
     segments: [
       { id: "s1", speaker: "patient", text: "右下后牙疼了三天。" }
     ]
   });
+  assert(blocked.status === 400, "report endpoint should block missing review gates");
+  assert(blocked.body.error.includes("医生审核关口"), "blocked report should explain review gate");
+
+  const autoDraft = await postJson(`http://127.0.0.1:${appPort}/api/report`, {
+    settings,
+    encounter: {
+      patientName: "张三",
+      doctorName: "李医生",
+      medicalHistory: "无特殊",
+      allergies: "无",
+      medications: "无",
+      examFindings: "右下后牙需进一步检查",
+      imagingFindings: "未拍片",
+      treatmentConsent: "已告知草稿需医生复核。",
+      followUp: "疼痛加重随诊。"
+    },
+    review: { autoDraft: true },
+    segments: [
+      { id: "s1", speaker: "patient", text: "右下后牙疼了三天。" }
+    ]
+  });
+  assert(autoDraft.report.chiefComplaintSummary === "右下后牙疼痛三天", "auto draft report should bypass pre-generation gates");
+
+  const report = await postJson(`http://127.0.0.1:${appPort}/api/report`, {
+    settings,
+    encounter: {
+      patientName: "张三",
+      patientId: "P001",
+      doctorName: "李医生",
+      medicalHistory: "无特殊",
+      allergies: "无",
+      medications: "无",
+      dentalHistory: "无特殊",
+      examFindings: "右下后牙需进一步检查",
+      perioChart: "全口探诊深度 2-3mm，BOP-。",
+      imagingFindings: "未拍片",
+      diagnoses: "右下后牙疼痛待查",
+      treatmentConsent: "已告知需检查后确定方案。",
+      followUp: "疼痛加重随诊。"
+    },
+    review: {
+      transcriptReviewed: true,
+      historyReviewed: true,
+      planReviewed: true
+    },
+    segments: [
+      { id: "s1", speaker: "patient", text: "右下后牙疼了三天。" }
+    ]
+  });
   assert(report.report.chiefComplaintSummary === "右下后牙疼痛三天", "report should include chief complaint summary");
   assert(report.report.treatmentPlan[0].source === "ai", "report should include ai treatment plan source");
+  assert(report.report.historyAndRisk.allergies === "无", "report should include structured allergy history");
+  assert(report.report.perioChart.includes("2-3mm"), "report should include perio chart summary");
+  assert(report.report.evidenceTrace.length === 2, "report should include evidence trace");
+  assert(report.report.clinicalAlerts.length === 1, "report should include clinical alerts");
 } finally {
   app.kill();
   await close(mockServer);
@@ -163,6 +258,11 @@ async function fetchJson(url) {
   return response.json();
 }
 
+async function fetchText(url) {
+  const response = await fetch(url);
+  return response.text();
+}
+
 async function postJson(url, body) {
   const response = await fetch(url, {
     method: "POST",
@@ -173,6 +273,18 @@ async function postJson(url, body) {
     throw new Error(await response.text());
   }
   return response.json();
+}
+
+async function postJsonExpectError(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  return {
+    status: response.status,
+    body: await response.json()
+  };
 }
 
 function assert(condition, message) {
