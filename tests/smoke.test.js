@@ -125,6 +125,7 @@ try {
   assert(html.includes("id=\"upperArch\""), "page should include upper jaw tooth row");
   assert(html.includes("id=\"lowerArch\""), "page should include lower jaw tooth row");
   assert(html.includes("id=\"toothFindingSummary\""), "page should include tooth finding summary");
+  assert(html.includes("class=\"tooth-legend\""), "page should include tooth type legend");
 
   const appJs = await fetchText(`http://127.0.0.1:${appPort}/app.js`);
   assert(appJs.includes("apiKey: \"\""), "frontend should not persist API keys in settings");
@@ -143,6 +144,8 @@ try {
   assert(appJs.includes("lowerTeeth"), "frontend should model lower jaw teeth");
   assert(appJs.includes("extractDentalFindings"), "frontend should extract tooth findings from clinical text");
   assert(appJs.includes("spokenToothToFdi"), "frontend should map spoken tooth locations to FDI tooth numbers");
+  assert(appJs.includes("toothIconSvg"), "frontend should render distinct tooth type icons");
+  assert(appJs.includes("function toothType"), "frontend should distinguish tooth types visually");
 
   const settings = {
     apiKey: "test-key",

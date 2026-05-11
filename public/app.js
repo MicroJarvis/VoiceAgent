@@ -1184,16 +1184,58 @@ function renderArch(parent, teeth, arch) {
   teeth.forEach((toothId) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `tooth ${arch}`;
+    button.className = `tooth ${arch} tooth-${toothType(toothId)}`;
     button.dataset.tooth = toothId;
-    button.setAttribute("aria-label", `${toothId} 牙`);
+    button.setAttribute("aria-label", `${toothId} ${toothTypeLabel(toothId)}`);
     button.innerHTML = [
+      toothIconSvg(toothId),
       `<span class="tooth-number">${toothId}</span>`,
       '<span class="tooth-finding"></span>'
     ].join("");
     button.addEventListener("click", () => insertToothToken(toothId));
     parent.append(button);
   });
+}
+
+function toothType(toothId) {
+  const position = toothId.slice(1);
+  if (["1", "2"].includes(position)) return "incisor";
+  if (position === "3") return "canine";
+  if (["4", "5"].includes(position)) return "premolar";
+  return "molar";
+}
+
+function toothTypeLabel(toothId) {
+  return {
+    incisor: "切牙",
+    canine: "犬牙",
+    premolar: "前磨牙",
+    molar: "磨牙"
+  }[toothType(toothId)];
+}
+
+function toothIconSvg(toothId) {
+  const type = toothType(toothId);
+  const paths = {
+    incisor: [
+      '<path d="M9 5.5C11 3.8 17 3.8 19 5.5L20.5 22C18 25.2 10 25.2 7.5 22L9 5.5Z" />',
+      '<path d="M9.5 10H18.5" />'
+    ],
+    canine: [
+      '<path d="M7.5 9C9 5.5 12 4 14 4C16 4 19 5.5 20.5 9L14 25.5L7.5 9Z" />',
+      '<path d="M14 7V21" />'
+    ],
+    premolar: [
+      '<path d="M6.5 9C8 5.2 11 4.4 14 7C17 4.4 20 5.2 21.5 9L20.5 22C17.8 25.4 10.2 25.4 7.5 22L6.5 9Z" />',
+      '<path d="M14 7.2V23" />'
+    ],
+    molar: [
+      '<path d="M5.5 8C6.6 5.4 9.6 4.5 12 6.2C13.1 4.8 14.9 4.8 16 6.2C18.4 4.5 21.4 5.4 22.5 8L22 22C19.4 25.8 8.6 25.8 6 22L5.5 8Z" />',
+      '<path d="M10 8.2L18 22.2" />',
+      '<path d="M18 8.2L10 22.2" />'
+    ]
+  }[type];
+  return `<svg class="tooth-icon" viewBox="0 0 28 30" aria-hidden="true">${paths.join("")}</svg>`;
 }
 
 function updateToothFindings() {
